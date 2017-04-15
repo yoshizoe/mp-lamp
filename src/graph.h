@@ -47,89 +47,91 @@
 namespace lamp_search {
 
 class Graph {
- public:
-  Graph(const Table & t);
-  ~Graph();
+public:
+	Graph(const Table & t);
+	~Graph();
 
-  const Table & GetTable() const {return t_; }
+	const Table & GetTable() const {
+		return t_;
+	}
 
-  class Node {
-   public:
-    Node();
- 
-    /** used for replacement scheme in Hash */
-    int getImportance() const { return visits_; }
+	class Node {
+	public:
+		Node();
 
-    // iterator of edges
+		/** used for replacement scheme in Hash */
+		int getImportance() const {
+			return visits_;
+		}
 
-    void Init();
+		// iterator of edges
 
-    friend class ChildIterator;
+		void Init();
 
-    class ChildIterator {
-     public:
-      ChildIterator(const Graph::Node & nd, int nu_items) :
-          node_ (nd),
-          item_id_ (0),
-          sorted_item_id_ (0),
-          nu_items_ (nu_items)
-      {
-        SkipDuplicates();
-      }
+		friend class ChildIterator;
 
-      void operator++() {
-        item_id_ ++;
-        SkipDuplicates();
-      }
+		class ChildIterator {
+		public:
+			ChildIterator(const Graph::Node & nd, int nu_items) :
+					node_(nd), item_id_(0), sorted_item_id_(0), nu_items_(
+							nu_items) {
+				SkipDuplicates();
+			}
 
-      int operator*() const {
-        return item_id_;
-      }
+			void operator++() {
+				item_id_++;
+				SkipDuplicates();
+			}
 
-      //bool operator!=();
+			int operator*() const {
+				return item_id_;
+			}
 
-      // return true while valid. return false if end
-      operator bool() const {
-        assert(item_id_ >= 0);
-        return (item_id_ < nu_items_);
-      }
+			//bool operator!=();
 
-     private:
-      const Node & node_;
+			// return true while valid. return false if end
+			operator bool() const {
+				assert(item_id_ >= 0);
+				return (item_id_ < nu_items_);
+			}
 
-      void SkipDuplicates() {
-        while(true) {
-          if (node_.sorted_items_[sorted_item_id_] > item_id_) break;
-          if (item_id_ >= nu_items_) break;
-          sorted_item_id_ ++;
-          if (node_.sorted_items_[sorted_item_id_] == item_id_)
-            item_id_ ++;
-        }
-      }
+		private:
+			const Node & node_;
 
-      int item_id_;
-      int sorted_item_id_;
-      int nu_items_;
-    }; // class ChildIterator
+			void SkipDuplicates() {
+				while (true) {
+					if (node_.sorted_items_[sorted_item_id_] > item_id_)
+						break;
+					if (item_id_ >= nu_items_)
+						break;
+					sorted_item_id_++;
+					if (node_.sorted_items_[sorted_item_id_] == item_id_)
+						item_id_++;
+				}
+			}
 
-   private:
-    boost::array<int, kMaxItemSet> sorted_items_; // default sort based on index
-    // todo:
-    // implement heuristically_sorted_items_
-    int depth_;
-    long long int visits_;
+			int item_id_;
+			int sorted_item_id_;
+			int nu_items_;
+		}; // class ChildIterator
 
-    double pmin_;
-    double pval_;
-  }; // class Node
+	private:
+		boost::array<int, kMaxItemSet> sorted_items_; // default sort based on index
+		// todo:
+		// implement heuristically_sorted_items_
+		int depth_;
+		long long int visits_;
 
+		double pmin_;
+		double pval_;
+	}; // class Node
 
- private:
-  // hash table of Node
+private:
+	// hash table of Node
 
-  double Evaluate(const Node & n);
+	double Evaluate(const Node & n);
 
-  const Table & t_;
+	const Table & t_;
 };
 
 } // namespace lamp_search
