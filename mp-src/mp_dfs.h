@@ -36,7 +36,7 @@
 #include <boost/array.hpp>
 #include <map>
 
-//#include "mpi.h"
+#include "mpi.h"
 
 #include "utils.h"
 #include "sorted_itemset.h"
@@ -50,11 +50,12 @@
 #include "database.h"
 #include "lamp_graph.h"
 
-#include "DTD.h"
-#include "Log.h"
-#include "SignificantSetResults.h"
 #include "StealState.h"
+#include "SignificantSetResults.h"
+#include "Log.h"
+#include "DTD.h"
 #include "FixedSizeStack.h"
+#include "MPI_Data.h"
 
 namespace lamp_search {
 
@@ -93,53 +94,6 @@ struct Tag {
 	};
 };
 
-struct MPI_Data {
-	MPI_Data(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
-			int m) : mpiRank_(rank), nTotalProc(nu_proc), granularity(n), isGranularitySec(n_is_ms), {
-	}
-	/**
-	 * MPI variables
-	 */
-	int mpiRank_;
-	int nTotalProc;
-	int * bsend_buffer_;
-	/**
-	 * Hypercube topology TODO: This should be put in something like ParallelTopology class.
-	 */
-	int lHypercubeEdge; // power of lifeline graph (length the hypercube edge)
-	int hypercubeDimension; // dimension of lifeline (dimension of the hypercube)
-	int * victims_; // proc id of random victims
-	int * lifelines_; // proc id of lifeline buddies
-	bool * lifelines_activated_;
-	FixedSizeStack * thieves_; // max size == nu_proc_
-	FixedSizeStack * lifeline_thieves_; // size == lifelines_ size + 3
-	int bcast_source_;
-	int * bcast_targets_;
-	int nRandStealTrials; // number of random steal trials
-	int nRandStealCands; // number of random steal candidates
-	int granularity;
-	bool isGranularitySec;
-
-	// TODO: Specific to LCM and LAMP???????
-	VariableLengthItemsetStack * node_stack_;
-	VariableLengthItemsetStack * give_stack_;
-
-	// TODO: what is it????
-	bool * accum_flag_;
-};
-
-struct LCM_Data {
-
-};
-
-struct LAMP_Data {
-
-};
-
-struct Significant_Data {
-
-};
-
 class MP_LAMP {
 public:
 	/**
@@ -159,14 +113,14 @@ public:
 
 	// call this before mainloop ?
 	// set dtd counters and misc.
-//	void Init();
+	void Init();
 
 	void CheckPoint();
 
 	// clear unreceived MPI messages
 	void ClearTasks();
 
-//	void InitTreeRequest();
+	void InitTreeRequest();
 	void SetTreeRequest();
 
 	// read file, prepare database, broadcast to all procs
@@ -177,12 +131,13 @@ public:
 	void InitDatabaseSub(bool pos);
 
 	void Search();
-//	void MainLoop();
+	void MainLoop();
 
 	void SearchStraw1(); // no workload distribution
 	void MainLoopStraw1();
 	void SearchStraw2(); // centralized queue
 	void MainLoopStraw2();
+
 
 	const Database<uint64> & GetDatabase() {
 		return *d_;
@@ -201,47 +156,14 @@ public:
 	std::ostream & PrintAggrPLog(std::ostream & out);
 
 private:
-	void InitParallel();
-
-	ParallelSearch* search;
-
-	MPI_Data mpi_data;
-	DTD dtd_;
-
 	static const int k_int_max;
 	// assuming (digits in long long int) > (bits of double mantissa)
 	static const long long int k_cs_max;
 
 	static const int k_probe_period;
 
-//	int * bsend_buffer_;
-
-	// GLB variables
-
-	boost::mt19937 rng_; // use seed as rank
-	boost::uniform_smallint<int> dst_p_;
-	boost::uniform_smallint<int> dst_m_;
-	boost::variate_generator<boost::mt19937&, boost::uniform_smallint<int> > rand_p_;
-	boost::variate_generator<boost::mt19937&, boost::uniform_smallint<int> > rand_m_;
-
-//	int bcast_source_;
-//	int * bcast_targets_;
-
-	// bool dtd_request_;
-	// bool dtd_flag_[3];
-
-//	bool echo_waiting_; // new! [2015-10-05 22:23]
-	//  bool bcast_requesting_; // new! [2015-10-01 13:49]
-
-	//bool accum_requesting_;
-//	bool * accum_flag_;
-
-//	int * victims_; // proc id of random victims
-//	int * lifelines_; // proc id of lifeline buddies
-//
-//	FixedSizeStack * thieves_; // max size == nu_proc_
-//	FixedSizeStack * lifeline_thieves_; // size == lifelines_ size + 3
-//	bool * lifelines_activated_;
+	MPI_Data mpi_data_;
+	DTD dtd_;
 
 	// proc id of lifeline thieves
 	// bool * thieves_requests_;
@@ -257,6 +179,12 @@ private:
 	Timer * timer_;
 
 	// variables for LAMP
+	struct Phase1_Data {
+
+	};
+
+	Phase1_Data phase1_data; // The name Phase1 is already so nonsense...
+
 	int lambda_max_; // equals to maximum support of single item
 	// initially set to 1. will be incremented to N if cs_thr[N] exceeded
 	// in 1st phase, search will be pruned if (sup_num < lambda_)
@@ -266,12 +194,12 @@ private:
 	double * pmin_thr_; // pmin_thr[sup] == tbl.PMin(sup), maybe redundant
 	long long int * cs_thr_; // cs_thr[sup] shows closed set num threshold
 
-//	void CheckCSThreshold();
-//
-//	bool ExceedCsThr() const;
-//	int NextLambdaThr() const;
-//	void IncCsAccum(int sup_num);
-//	double GetInterimSigLevel(int lambda) const;
+	void CheckCSThreshold();
+
+	bool ExceedCsThr() const;
+	int NextLambdaThr() const;
+	void IncCsAccum(int sup_num);
+	double GetInterimSigLevel(int lambda) const;
 
 	// cs_accum_array is int array of 0..lambda_max_ (size lambda_max_+1)
 	// cs_accum_array_[sup] shows closed set num with support higher than or equals to sup
@@ -285,23 +213,23 @@ private:
 	// long long int * cs_accum_array_base_; // int array of -1..lambda_max_ (size lambda_max_+2)
 
 	// 0: count, 1: time warp, 2: empty flag, 3--: array
-//	long long int * dtd_accum_array_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
-//	// -3: count, -2: time warp, -1: empty flag, 0--: array
-//	long long int * accum_array_; // int array of [0...lambda_max_] (size lambda_max_+1)
-//
-//	// 0: count, 1: time warp, 2: empty flag, 3--: array
-//	long long int * dtd_accum_recv_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
-//	// -3: count, -2: time warp, -1: empty flag, 0--: array
-//	long long int * accum_recv_; // int array of [0...lambda_max_] (size lambda_max_+1)
-//
-//	VariableLengthItemsetStack * node_stack_;
-//	// todo: prepare stack with no sup hist
-//	// 0: time zone, 1: is_lifeline
-//	VariableLengthItemsetStack * give_stack_;
+	long long int * dtd_accum_array_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
+	// -3: count, -2: time warp, -1: empty flag, 0--: array
+	long long int * accum_array_; // int array of [0...lambda_max_] (size lambda_max_+1)
+
+	// 0: count, 1: time warp, 2: empty flag, 3--: array
+	long long int * dtd_accum_recv_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
+	// -3: count, -2: time warp, -1: empty flag, 0--: array
+	long long int * accum_recv_; // int array of [0...lambda_max_] (size lambda_max_+1)
+
+	VariableLengthItemsetStack * node_stack_;
+	// todo: prepare stack with no sup hist
+	// 0: time zone, 1: is_lifeline
+	VariableLengthItemsetStack * give_stack_;
 
 	// periodic closed set count reduce.
-//	void Probe();
-//	bool processing_node_; // prevent termination while processing node
+	void Probe();
+	bool processing_node_; // prevent termination while processing node
 
 	// void ProbeAccumTask();
 	// void ProbeBasicTask();
@@ -309,18 +237,18 @@ private:
 
 	// first, send to random thief and then to lifeline theives
 	// random thief has higher priority
-//	void Distribute();
+	void Distribute();
 
-//	void Give(VariableLengthItemsetStack * st, int steal_num);
+	void Give(VariableLengthItemsetStack * st, int steal_num);
 
-//	void Deal();
+	void Deal();
 
 	// send reject to remaining requests
-//	void Reject();
+	void Reject();
 
 	// set this in steal, reset this in RecvGive and RecvReject
 	// small difference from x10 implementation
-//	bool waiting_;
+	bool waiting_;
 
 	// send steal requests
 	// two phase, 1, random, 2, lifeline
@@ -329,7 +257,7 @@ private:
 	// how about prepare int steal_id_; and do steal_id_++/ steal_id_ %= z ?
 	// note:
 	// don't send multiple requests at once
-//	void Steal();
+	void Steal();
 	// Steal needs change from x10 because of "bool waiting"
 	// Steal sends one request each time it is called
 	// there should be steal_state and counters c_r and c_l (random and lifeline)
@@ -344,38 +272,38 @@ private:
 	// 6, if c_l >= z, c_l = 0, set state RANDOM and return
 
 	// steal with probe
-//	void Steal2();
+	void Steal2();
 
 	// will be false if w random steal and all lifeline steal finished
 	// will be true if RecvGive
-//	StealState stealer_;
+	StealState stealer_;
 
 	//--------
 	// control
 
 	// 0: count, 1: time warp flag, 2: empty flag
-//	void SendDTDRequest();
-//	void RecvDTDRequest(int src);
-//
-//	bool DTDReplyReady() const;
-//	void DTDCheck();
-//
-//	// 0: count, 1: time warp flag, 2: empty flag
-//	void SendDTDReply();
-//	void RecvDTDReply(int src);
-//
-//	bool DTDAccumReady() const;
-//
-//	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-//	void SendDTDAccumRequest();
-//	void RecvDTDAccumRequest(int src);
-//
-//	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-//	void SendDTDAccumReply();
-//	void RecvDTDAccumReply(int src);
-//
-//	void SendBcastFinish();
-//	void RecvBcastFinish(int src);
+	void SendDTDRequest();
+	void RecvDTDRequest(int src);
+
+	bool DTDReplyReady() const;
+	void DTDCheck();
+
+	// 0: count, 1: time warp flag, 2: empty flag
+	void SendDTDReply();
+	void RecvDTDReply(int src);
+
+	bool DTDAccumReady() const;
+
+	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+	void SendDTDAccumRequest();
+	void RecvDTDAccumRequest(int src);
+
+	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+	void SendDTDAccumReply();
+	void RecvDTDAccumReply(int src);
+
+	void SendBcastFinish();
+	void RecvBcastFinish(int src);
 
 	//--------
 
@@ -385,22 +313,22 @@ private:
 	// basic
 
 	// send recv functions
-//	void SendRequest(int dst, int is_lifeline); // for random thieves, is_lifeline = -1
-//	void RecvRequest(int src);
-//
-//	// 0: time zone, 1: is_lifeline
-//	void SendReject(int dst);
-//	void RecvReject(int src);
-//
-//	// 1: time zone
-//	void SendGive(VariableLengthItemsetStack * st, int dst, int is_lifeline);
-//
-//	// sets lifelines_activated_ = false
-//	// lifelines_activated_ becomes false only in this case (reject does NOT)
-//	void RecvGive(int src, MPI_Status status);
-//
-//	void SendLambda(int lambda);
-//	void RecvLambda(int src);
+	void SendRequest(int dst, int is_lifeline); // for random thieves, is_lifeline = -1
+	void RecvRequest(int src);
+
+	// 0: time zone, 1: is_lifeline
+	void SendReject(int dst);
+	void RecvReject(int src);
+
+	// 1: time zone
+	void SendGive(VariableLengthItemsetStack * st, int dst, int is_lifeline);
+
+	// sets lifelines_activated_ = false
+	// lifelines_activated_ becomes false only in this case (reject does NOT)
+	void RecvGive(int src, MPI_Status status);
+
+	void SendLambda(int lambda);
+	void RecvLambda(int src);
 
 	// 0: time zone
 	// search for depth 1 and get initial lambda
@@ -464,18 +392,18 @@ private:
 	double final_sig_level_;
 
 	// true if bcast_targets_ are all -1
-//	bool IsLeaf() const;
-//
-//	// return flag. if (flag), it is ready to receive
-//	int CallIprobe(MPI_Status * status, int * count, int * src);
-//
-//	int CallRecv(void * buffer, int count, MPI_Datatype type, int src, int tag,
-//			MPI_Status * status);
-//	int CallBsend(void * buffer, int count_int, MPI_Datatype type, int dest,
-//			int tag);
-//
-//	int CallBcast(void * buffer, int data_count, MPI_Datatype type);
-//	// todo: implement call reduce, call gather
+	bool IsLeaf() const;
+
+	// return flag. if (flag), it is ready to receive
+	int CallIprobe(MPI_Status * status, int * count, int * src);
+
+	int CallRecv(void * buffer, int count, MPI_Datatype type, int src, int tag,
+			MPI_Status * status);
+	int CallBsend(void * buffer, int count_int, MPI_Datatype type, int dest,
+			int tag);
+
+	int CallBcast(void * buffer, int data_count, MPI_Datatype type);
+	// todo: implement call reduce, call gather
 
 	//--------
 	// for debug
@@ -496,7 +424,7 @@ private:
 
 	//--------
 	// testing [2015-10-01 13:54]
-//	bool last_bcast_was_dtd_;
+	bool last_bcast_was_dtd_;
 
 };
 

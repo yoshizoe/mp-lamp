@@ -54,7 +54,7 @@ DEFINE_string(item, "", "filename of item set");
 DEFINE_string(pos, "", "filename of positive / negative file");
 DEFINE_int32(posnum, 0, "positive total (used if for 1st phase only)");
 
-DECLARE_bool(log); // false, "show log", mp-lamp.cc
+DECLARE_bool(log); // false, "show log", mp-lamp.cc , true, "show log"
 
 DECLARE_bool(second_phase); // true, "do second phase"
 DECLARE_bool(third_phase);  // true, "do third phase"
@@ -62,7 +62,7 @@ DECLARE_bool(third_phase);  // true, "do third phase"
 DEFINE_int32(n, 1000, "granularity of one Node process");
 DEFINE_bool(n_is_ms, true, "true: n is milli sec, false: n is num task");
 DEFINE_int32(w, 1, "number of random steal attempts");
-DEFINE_int32(m, 1024, "number of maximum random steal candidates"); // 1024 is default of x10 GLB
+DEFINE_int32(m, 2, "number of maximum random steal candidates"); // 1024 is default of x10 GLB
 DEFINE_int32(l, 2, "power of lifeline graph");
 
 DEFINE_bool(straw1, false, "use Strawman1 for comparison");

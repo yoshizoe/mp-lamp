@@ -6,8 +6,8 @@
  */
 #include "Log.h"
 
-#include "mp_dfs.h"
 #include <vector>
+#include "mp_dfs.h"
 
 namespace lamp_search {
 

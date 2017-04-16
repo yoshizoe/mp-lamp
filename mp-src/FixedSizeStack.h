@@ -36,6 +36,9 @@ public:
 	friend std::ostream& operator<<(std::ostream & out,
 			const FixedSizeStack & st);
 
+	int data(int i) const {
+		return stack_[i];
+	}
 private:
 	int size_;
 	int * stack_;

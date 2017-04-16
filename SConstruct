@@ -200,8 +200,8 @@ def MPIBuild(mode, compile_flags):
     SConscript(os.path.join(mpi_build_dir, 'mp-main', 'SConscript'))
 
     if mode == 'opt':
-        Command("mp-lamp", os.path.join(mpi_build_dir, "mp-main",
-                                        "mp-lamp"), Copy("$TARGET", "$SOURCE"))
+        Command("bin-lamp", os.path.join(mpi_build_dir, "mp-main",
+                                        "bin-lamp"), Copy("$TARGET", "$SOURCE"))
 
 
 # opt build
