@@ -131,7 +131,7 @@ public:
 	void InitDatabaseSub(bool pos);
 
 	void Search();
-	void MainLoop();
+//	void MainLoop();
 
 	void SearchStraw1(); // no workload distribution
 	void MainLoopStraw1();
@@ -156,6 +156,10 @@ public:
 	std::ostream & PrintAggrPLog(std::ostream & out);
 
 private:
+	void GetMinimalSupport(MPI_Data& mpi_data);
+	void GetTestablePatterns(MPI_Data& mpi_data);
+	void GetSignificantPatterns(MPI_Data& mpi_data);
+
 	static const int k_int_max;
 	// assuming (digits in long long int) > (bits of double mantissa)
 	static const long long int k_cs_max;
@@ -179,27 +183,29 @@ private:
 	Timer * timer_;
 
 	// variables for LAMP
-	struct Phase1_Data {
-
+	struct GetMinimalSupportData {
+		int lambda_max_;
+		int lambda_;
+		long long int * cs_thr_;
 	};
 
-	Phase1_Data phase1_data; // The name Phase1 is already so nonsense...
+	GetMinimalSupportData get_min_sup_data; // The name Phase1 is already so nonsense...
 
-	int lambda_max_; // equals to maximum support of single item
+	int lambda_max_; // equals to maximum support of single item // getMinSup
 	// initially set to 1. will be incremented to N if cs_thr[N] exceeded
 	// in 1st phase, search will be pruned if (sup_num < lambda_)
-	int lambda_;
+	int lambda_; // getMinSup
 	// todo: initial value can be set after checking all single item itemsets
-	double sig_level_; // initially set to 1. set to 0.05 (FLAGS_a) / cs_thr_[global_sup_thr_-1]
-	double * pmin_thr_; // pmin_thr[sup] == tbl.PMin(sup), maybe redundant
-	long long int * cs_thr_; // cs_thr[sup] shows closed set num threshold
+	long long int * cs_thr_; // cs_thr[sup] shows closed set num threshold // getMinSup
 
-	void CheckCSThreshold();
+	double sig_level_; // initially set to 1. set to 0.05 (FLAGS_a) / cs_thr_[global_sup_thr_-1] // LAMP
 
-	bool ExceedCsThr() const;
-	int NextLambdaThr() const;
-	void IncCsAccum(int sup_num);
-	double GetInterimSigLevel(int lambda) const;
+	void CheckCSThreshold(); // getMinSup
+
+	bool ExceedCsThr() const; // getMinSup
+	int NextLambdaThr() const; // getMinSup
+	void IncCsAccum(int sup_num); // getMinSup
+	double GetInterimSigLevel(int lambda) const; // LAMP
 
 	// cs_accum_array is int array of 0..lambda_max_ (size lambda_max_+1)
 	// cs_accum_array_[sup] shows closed set num with support higher than or equals to sup

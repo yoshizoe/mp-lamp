@@ -127,7 +127,7 @@ class Table {
   int nu_pos_total_;
   
   //std::vector< boost::dynamic_bitset<> > v(10, boost::dynamic_bitset<>(3));
-  std::vector< boost::dynamic_bitset<> > * data_;
+  std::vector< boost::dynamic_bitset<> > * data_; // TODO: this implementation is dependent on binary features.
   // std::vector< boost::dynamic_bitset<> > ** data_; // for confsize > 1
 
   boost::dynamic_bitset<> * posneg_;

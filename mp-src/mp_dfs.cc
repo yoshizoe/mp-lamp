@@ -93,9 +93,9 @@ const int MP_LAMP::k_probe_period = 128;
 
 MP_LAMP::MP_LAMP(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
 		int m) :
-		mpi_data_(rank, nu_proc, n, n_is_ms, w, l, m), dtd_(
-				k_echo_tree_branch), d_(NULL), g_(NULL), bsh_(NULL), timer_(
-				Timer::GetInstance()), pmin_thr_(NULL), cs_thr_(NULL), dtd_accum_array_base_(
+		mpi_data_(rank, nu_proc, n, n_is_ms, w, l, m), dtd_(k_echo_tree_branch), d_(
+		NULL), g_(NULL), bsh_(NULL), timer_(Timer::GetInstance()), cs_thr_(
+		NULL), dtd_accum_array_base_(
 		NULL), accum_array_(NULL), dtd_accum_recv_base_(NULL), accum_recv_(
 		NULL), node_stack_(NULL), give_stack_(NULL), processing_node_(false), waiting_(
 				false), stealer_(mpi_data_.nRandStealTrials_,
@@ -179,7 +179,6 @@ MP_LAMP::MP_LAMP(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
 	}
 	printf("mpidata\n");
 
-
 	dtd_.Init();
 
 	printf("dtd\n");
@@ -242,8 +241,7 @@ void MP_LAMP::InitTreeRequest() {
 	if (mpi_data_.mpiRank_ > 0) {
 		mpi_data_.lifelines_activated_[(mpi_data_.mpiRank_ - 1)
 				/ k_echo_tree_branch] = true;
-		mpi_data_.bcast_source_ = (mpi_data_.mpiRank_ - 1)
-				/ k_echo_tree_branch;
+		mpi_data_.bcast_source_ = (mpi_data_.mpiRank_ - 1) / k_echo_tree_branch;
 	}
 
 	for (int i = 0; i < k_echo_tree_branch; ++i) {
@@ -253,8 +251,7 @@ void MP_LAMP::InitTreeRequest() {
 
 void MP_LAMP::SetTreeRequest() {
 	for (std::size_t i = 1; i <= k_echo_tree_branch; i++) {
-		if (k_echo_tree_branch * mpi_data_.mpiRank_ + i
-				< mpi_data_.nTotalProc_)
+		if (k_echo_tree_branch * mpi_data_.mpiRank_ + i < mpi_data_.nTotalProc_)
 			mpi_data_.lifeline_thieves_->Push(
 					k_echo_tree_branch * mpi_data_.mpiRank_ + i);
 	}
@@ -270,8 +267,8 @@ MP_LAMP::~MP_LAMP() {
 	DBG(D(2) << "MP_LAMP destructor begin" << std::endl
 	;);
 
-	if (pmin_thr_)
-		delete[] pmin_thr_;
+//	if (pmin_thr_)
+//		delete[] pmin_thr_;
 	if (cs_thr_)
 		delete[] cs_thr_;
 	if (dtd_accum_array_base_)
@@ -359,17 +356,19 @@ void MP_LAMP::InitDatabaseRoot(std::istream & is1, std::istream & is2) {
 
 	g_ = new LampGraph<uint64>(*d_);
 
-	lambda_max_ = d_->MaxX();
+	// Lambda max is initially the number of total transactions in the database.
+	lambda_max_ = d_->MaxX(); // used for getMinSup
 	// D() << "max_x=lambda_max=" << lambda_max_ << std::endl;
 	// D() << "pos_total=" << d_->PosTotal() << std::endl;
 	// d_->DumpItems(D(false));
 	// d_->DumpPMinTable(D(false));
 
-	pmin_thr_ = new double[lambda_max_ + 1];
-	cs_thr_ = new long long int[lambda_max_ + 1];
+	double *pmin_thr_ = new double[lambda_max_ + 1]; // used for getMinSup
+	cs_thr_ = new long long int[lambda_max_ + 1]; // used for getMinSup
+
 	dtd_accum_array_base_ = new long long int[lambda_max_ + 4];
 	dtd_accum_recv_base_ = new long long int[lambda_max_ + 4];
-	accum_array_ = &(dtd_accum_array_base_[3]);
+	accum_array_ = &(dtd_accum_array_base_[3]); // TODO: ???
 	accum_recv_ = &(dtd_accum_recv_base_[3]);
 
 	node_stack_ = new VariableLengthItemsetStack(FLAGS_stack_size);
@@ -397,6 +396,8 @@ void MP_LAMP::InitDatabaseRoot(std::istream & is1, std::istream & is2) {
 
 	sup_buf_ = bsh_->New();
 	child_sup_buf_ = bsh_->New();
+
+	delete pmin_thr_;
 }
 
 void MP_LAMP::InitDatabaseRoot(std::istream & is1, int posnum) {
@@ -450,7 +451,7 @@ void MP_LAMP::InitDatabaseRoot(std::istream & is1, int posnum) {
 	// d_->DumpItems(D(false));
 	// d_->DumpPMinTable(D(false));
 
-	pmin_thr_ = new double[lambda_max_ + 1];
+	double* pmin_thr_ = new double[lambda_max_ + 1];
 	cs_thr_ = new long long int[lambda_max_ + 1];
 	dtd_accum_array_base_ = new long long int[lambda_max_ + 4];
 	dtd_accum_recv_base_ = new long long int[lambda_max_ + 4];
@@ -482,6 +483,8 @@ void MP_LAMP::InitDatabaseRoot(std::istream & is1, int posnum) {
 
 	sup_buf_ = bsh_->New();
 	child_sup_buf_ = bsh_->New();
+
+	delete pmin_thr_;
 }
 
 void MP_LAMP::InitDatabaseSub(bool pos) {
@@ -526,7 +529,7 @@ void MP_LAMP::InitDatabaseSub(bool pos) {
 // d_->DumpItems(D(false));
 // d_->DumpPMinTable(D(false));
 
-	pmin_thr_ = new double[lambda_max_ + 1];
+	double* pmin_thr_ = new double[lambda_max_ + 1];
 	cs_thr_ = new long long int[lambda_max_ + 1];
 	dtd_accum_array_base_ = new long long int[lambda_max_ + 4];
 	dtd_accum_recv_base_ = new long long int[lambda_max_ + 4];
@@ -558,6 +561,8 @@ void MP_LAMP::InitDatabaseSub(bool pos) {
 
 	sup_buf_ = bsh_->New();
 	child_sup_buf_ = bsh_->New();
+
+	delete pmin_thr_;
 }
 
 //int MP_LAMP::ComputeZ(int p, int l) {
@@ -771,7 +776,9 @@ void MP_LAMP::SendDTDRequest() {
 	for (int i = 0; i < k_echo_tree_branch; i++) {
 		if (mpi_data_.bcast_targets_[i] < 0)
 			break;
-		assert(mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_ && "SendDTDRequest");
+		assert(
+				mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_
+						&& "SendDTDRequest");
 		CallBsend(message, 1, MPI_INT, mpi_data_.bcast_targets_[i],
 				Tag::DTD_REQUEST);
 		DBG(
@@ -884,13 +891,16 @@ void MP_LAMP::SendDTDAccumRequest() {
 	for (int i = 0; i < k_echo_tree_branch; i++) {
 		if (mpi_data_.bcast_targets_[i] < 0)
 			break;
-		assert(mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_ && "SendDTDAccumRequest");
+		assert(
+				mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_
+						&& "SendDTDAccumRequest");
 		CallBsend(message, 1, MPI_INT, mpi_data_.bcast_targets_[i],
 				Tag::DTD_ACCUM_REQUEST);
 
 		DBG(
-				D(3) << "SendDTDAccumRequest: dst=" << mpi_data_.bcast_targets_[i]
-						<< "\ttimezone=" << dtd_.time_zone_ << std::endl
+				D(3) << "SendDTDAccumRequest: dst="
+						<< mpi_data_.bcast_targets_[i] << "\ttimezone="
+						<< dtd_.time_zone_ << std::endl
 				;);
 	}
 }
@@ -931,7 +941,9 @@ void MP_LAMP::SendDTDAccumReply() {
 					<< tw_flag << "\tem=" << em_flag << std::endl
 			;);
 
-	assert(mpi_data_.bcast_source_ < mpi_data_.nTotalProc_ && "SendDTDAccumReply");
+	assert(
+			mpi_data_.bcast_source_ < mpi_data_.nTotalProc_
+					&& "SendDTDAccumReply");
 	CallBsend(dtd_accum_array_base_, lambda_max_ + 4, MPI_LONG_LONG_INT,
 			mpi_data_.bcast_source_, Tag::DTD_ACCUM_REPLY);
 
@@ -1030,7 +1042,9 @@ void MP_LAMP::SendBcastFinish() {
 	for (int i = 0; i < k_echo_tree_branch; i++) {
 		if (mpi_data_.bcast_targets_[i] < 0)
 			break;
-		assert(mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_ && "SendBcastFinish");
+		assert(
+				mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_
+						&& "SendBcastFinish");
 		CallBsend(message, 1, MPI_INT, mpi_data_.bcast_targets_[i],
 				Tag::BCAST_FINISH);
 	}
@@ -1145,7 +1159,7 @@ void MP_LAMP::Search() {
 								/ GIGA << std::endl
 				;);
 
-		MainLoop();
+		GetMinimalSupport(mpi_data_);
 
 		// todo: reduce expand_num_
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
@@ -1237,7 +1251,7 @@ void MP_LAMP::Search() {
 				;);
 
 		sig_level_ = int_sig_lev;
-		MainLoop();
+		GetTestablePatterns(mpi_data_);
 	}
 
 	DBG(D(1) << "closed_set_num=" << closed_set_num_ << std::endl
@@ -1298,7 +1312,7 @@ void MP_LAMP::Search() {
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
 	{
-		MainLoop();
+		GetSignificantPatterns(mpi_data_);
 	}
 
 	// copy only significant itemset to buffer
@@ -2289,14 +2303,17 @@ void MP_LAMP::SendLambda(int lambda) {
 	for (int i = 0; i < k_echo_tree_branch; i++) {
 		if (mpi_data_.bcast_targets_[i] < 0)
 			break;
-		assert(mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_ && "SendLambda");
+		assert(
+				mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_
+						&& "SendLambda");
 		CallBsend(message, 2, MPI_INT, mpi_data_.bcast_targets_[i],
 				Tag::LAMBDA);
 		dtd_.OnSend();
 
 		DBG(
-				D(2) << "SendLambda: dst=" << mpi_data_.bcast_targets_[i] << "\tlambda="
-						<< lambda << "\tdtd_count=" << dtd_.count_ << std::endl
+				D(2) << "SendLambda: dst=" << mpi_data_.bcast_targets_[i]
+						<< "\tlambda=" << lambda << "\tdtd_count="
+						<< dtd_.count_ << std::endl
 				;);
 	}
 }
@@ -2384,11 +2401,15 @@ void MP_LAMP::SendResultRequest() {
 		if (mpi_data_.bcast_targets_[i] < 0)
 			break;
 
-		assert(mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_ && "SendResultRequest");
+		assert(
+				mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_
+						&& "SendResultRequest");
 		CallBsend(message, 1, MPI_INT, mpi_data_.bcast_targets_[i],
 				Tag::RESULT_REQUEST);
-		DBG(D(2) << "SendResultRequest: dst=" << mpi_data_.bcast_targets_[i] << std::endl
-		;);
+		DBG(
+				D(2) << "SendResultRequest: dst=" << mpi_data_.bcast_targets_[i]
+						<< std::endl
+				;);
 	}
 }
 
@@ -2410,7 +2431,9 @@ void MP_LAMP::RecvResultRequest(int src) {
 void MP_LAMP::SendResultReply() {
 	int * message = significant_stack_->Stack();
 	int size = significant_stack_->UsedCapacity();
-	assert(mpi_data_.bcast_source_ < mpi_data_.nTotalProc_ && "SendResultReply");
+	assert(
+			mpi_data_.bcast_source_ < mpi_data_.nTotalProc_
+					&& "SendResultReply");
 	CallBsend(message, size, MPI_INT, mpi_data_.bcast_source_,
 			Tag::RESULT_REPLY);
 
@@ -2624,7 +2647,8 @@ void MP_LAMP::Steal() {
 							<< stealer_.Requesting() << "\tlifeline counter="
 							<< stealer_.LifelineCounter()
 							<< "\tlifeline victim=" << stealer_.LifelineVictim()
-							<< "\tz_=" << mpi_data_.hypercubeDimension_ << std::endl
+							<< "\tz_=" << mpi_data_.hypercubeDimension_
+							<< std::endl
 					;);
 		}
 
@@ -2695,59 +2719,162 @@ void MP_LAMP::Steal2() {
 }
 
 // mainloop
-void MP_LAMP::MainLoop() {
+void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data) {
+	phase_ = 1;
 	DBG(D(1) << "MainLoop" << std::endl
 	;);
-	if (phase_ == 1 || phase_ == 2) {
+	while (!dtd_.terminated_) {
 		while (!dtd_.terminated_) {
-			while (!dtd_.terminated_) {
-				if (ProcessNode(mpi_data_.granularity_)) {
-					log_.d_.node_stack_max_itm_ = std::max(
-							log_.d_.node_stack_max_itm_,
-							(long long int) (node_stack_->NuItemset()));
-					log_.d_.node_stack_max_cap_ = std::max(
-							log_.d_.node_stack_max_cap_,
-							(long long int) (node_stack_->UsedCapacity()));
-					Probe();
-					if (dtd_.terminated_)
-						break;
-					Distribute();
-					Reject(); // distribute finished, reject remaining requests
-					if (mpi_data_.mpiRank_ == 0 && phase_ == 1)
-						CheckCSThreshold();
-				} else
+			if (ProcessNode(mpi_data_.granularity_)) {
+				log_.d_.node_stack_max_itm_ = std::max(
+						log_.d_.node_stack_max_itm_,
+						(long long int) (node_stack_->NuItemset()));
+				log_.d_.node_stack_max_cap_ = std::max(
+						log_.d_.node_stack_max_cap_,
+						(long long int) (node_stack_->UsedCapacity()));
+				Probe();
+				if (dtd_.terminated_)
 					break;
-			}
-			if (dtd_.terminated_)
+				Distribute();
+				Reject(); // distribute finished, reject remaining requests
+				if (mpi_data_.mpiRank_ == 0)
+					CheckCSThreshold();
+			} else
 				break;
-
-			log_.idle_start_ = timer_->Elapsed();
-			Reject(); // node_stack_ empty. reject requests
-			Steal(); // request steal
-			if (dtd_.terminated_) {
-				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-				break;
-			}
-
-			Probe();
-			if (dtd_.terminated_) {
-				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-				break;
-			}
-			if (mpi_data_.mpiRank_ == 0 && phase_ == 1)
-				CheckCSThreshold();
-			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 		}
-	} else if (phase_ == 3) {
-		ExtractSignificantSet();
-		if (mpi_data_.mpiRank_ == 0)
-			SendResultRequest();
+		if (dtd_.terminated_)
+			break;
 
-		while (!dtd_.terminated_)
-			Probe();
+		log_.idle_start_ = timer_->Elapsed();
+		Reject(); // node_stack_ empty. reject requests
+		Steal(); // request steal
+		if (dtd_.terminated_) {
+			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+			break;
+		}
+
+		Probe();
+		if (dtd_.terminated_) {
+			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+			break;
+		}
+		if (mpi_data_.mpiRank_ == 0)
+			CheckCSThreshold();
+		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 	}
 
 }
+
+void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data) {
+	phase_ = 2;
+	DBG(D(1) << "MainLoop" << std::endl
+	;);
+	while (!dtd_.terminated_) {
+		while (!dtd_.terminated_) {
+			if (ProcessNode(mpi_data_.granularity_)) {
+				log_.d_.node_stack_max_itm_ = std::max(
+						log_.d_.node_stack_max_itm_,
+						(long long int) (node_stack_->NuItemset()));
+				log_.d_.node_stack_max_cap_ = std::max(
+						log_.d_.node_stack_max_cap_,
+						(long long int) (node_stack_->UsedCapacity()));
+				Probe();
+				if (dtd_.terminated_)
+					break;
+				Distribute();
+				Reject(); // distribute finished, reject remaining requests
+			} else
+				break;
+		}
+		if (dtd_.terminated_)
+			break;
+
+		log_.idle_start_ = timer_->Elapsed();
+		Reject(); // node_stack_ empty. reject requests
+		Steal(); // request steal
+		if (dtd_.terminated_) {
+			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+			break;
+		}
+
+		Probe();
+		if (dtd_.terminated_) {
+			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+			break;
+		}
+
+		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+	}
+
+}
+
+void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data) {
+	DBG(D(1) << "MainLoop" << std::endl
+	;);
+
+	ExtractSignificantSet();
+	if (mpi_data_.mpiRank_ == 0)
+		SendResultRequest();
+
+	while (!dtd_.terminated_)
+		Probe();
+
+}
+
+//// mainloop
+//void MP_LAMP::MainLoop() {
+//	DBG(D(1) << "MainLoop" << std::endl
+//	;);
+//	if (phase_ == 1 || phase_ == 2) {
+//		while (!dtd_.terminated_) {
+//			while (!dtd_.terminated_) {
+//				if (ProcessNode(mpi_data_.granularity_)) {
+//					log_.d_.node_stack_max_itm_ = std::max(
+//							log_.d_.node_stack_max_itm_,
+//							(long long int) (node_stack_->NuItemset()));
+//					log_.d_.node_stack_max_cap_ = std::max(
+//							log_.d_.node_stack_max_cap_,
+//							(long long int) (node_stack_->UsedCapacity()));
+//					Probe();
+//					if (dtd_.terminated_)
+//						break;
+//					Distribute();
+//					Reject(); // distribute finished, reject remaining requests
+//					if (mpi_data_.mpiRank_ == 0 && phase_ == 1)
+//						CheckCSThreshold();
+//				} else
+//					break;
+//			}
+//			if (dtd_.terminated_)
+//				break;
+//
+//			log_.idle_start_ = timer_->Elapsed();
+//			Reject(); // node_stack_ empty. reject requests
+//			Steal(); // request steal
+//			if (dtd_.terminated_) {
+//				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//				break;
+//			}
+//
+//			Probe();
+//			if (dtd_.terminated_) {
+//				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//				break;
+//			}
+//			if (mpi_data_.mpiRank_ == 0 && phase_ == 1)
+//				CheckCSThreshold();
+//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//		}
+//	} else if (phase_ == 3) {
+//		ExtractSignificantSet();
+//		if (mpi_data_.mpiRank_ == 0)
+//			SendResultRequest();
+//
+//		while (!dtd_.terminated_)
+//			Probe();
+//	}
+//
+//}
 
 // mainloop for straw man 1
 void MP_LAMP::MainLoopStraw1() {
