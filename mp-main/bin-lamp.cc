@@ -56,8 +56,8 @@ DEFINE_int32(posnum, 0, "positive total (used if for 1st phase only)");
 
 DECLARE_bool(log); // false, "show log", mp-lamp.cc , true, "show log"
 
-DECLARE_bool(second_phase); // true, "do second phase"
-DECLARE_bool(third_phase);  // true, "do third phase"
+DECLARE_bool(second_phase);// true, "do second phase"
+DECLARE_bool(third_phase);// true, "do third phase"
 
 DEFINE_int32(n, 1000, "granularity of one Node process");
 DEFINE_bool(n_is_ms, true, "true: n is milli sec, false: n is num task");
@@ -69,159 +69,163 @@ DEFINE_bool(straw1, false, "use Strawman1 for comparison");
 
 DEFINE_int32(sleep, 0, "sleep in the beinning (for debugger attach)");
 
-using namespace lamp_search;
+using
+namespace lamp_search;
 
 int main(int argc, char **argv) {
-  MPI_Init(&argc, &argv);
-  google::ParseCommandLineFlags(&argc, &argv, true);
+	MPI_Init(&argc, &argv);
+	google::ParseCommandLineFlags(&argc, &argv, true);
 
-  if (FLAGS_sleep > 0) {
-    sleep(FLAGS_sleep);
-    //std::this_thread::sleep_for(std::chrono::seconds(FLAGS_sleep));
-  }
+	if (FLAGS_sleep > 0) {
+		sleep(FLAGS_sleep);
+		//std::this_thread::sleep_for(std::chrono::seconds(FLAGS_sleep));
+	}
 
-  int rank, nu_proc;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &nu_proc);
+	int rank, nu_proc;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &nu_proc);
 
-  long long int search_start_time, search_end_time;
+	long long int search_start_time, search_end_time;
 
-  {
-    if (FLAGS_item == "") {
-      if (rank==0)
-        std::cout << "specify item file with --item" << std::endl;
-      MPI_Finalize();
-      return 1;
-    }
+	{
+		if (FLAGS_item == "") {
+			if (rank == 0)
+				std::cout << "specify item file with --item" << std::endl;
+			MPI_Finalize();
+			return 1;
+		}
 
-    if (FLAGS_pos == "" && FLAGS_posnum == 0) {
-      if (rank==0)
-        std::cout << "specify --pos or --posnum" << std::endl;
-      MPI_Finalize();
-      return 1;
-    }
+		if (FLAGS_pos == "" && FLAGS_posnum == 0) {
+			if (rank == 0)
+				std::cout << "specify --pos or --posnum" << std::endl;
+			MPI_Finalize();
+			return 1;
+		}
 
-    if (FLAGS_third_phase && FLAGS_pos == "") {
-      if (rank==0)
-        std::cout << "specify positive file by --pos for third phase" << std::endl;
-      MPI_Finalize();
-      return 1;
-    }
+		if (FLAGS_third_phase && FLAGS_pos == "") {
+			if (rank == 0)
+				std::cout << "specify positive file by --pos for third phase"
+						<< std::endl;
+			MPI_Finalize();
+			return 1;
+		}
 
-    // todo: prepare clean exit for wrong options
-    //       need broadcast for finish
-    //       MPI_Bcast flag seems simple
+		// todo: prepare clean exit for wrong options
+		//       need broadcast for finish
+		//       MPI_Bcast flag seems simple
 
-    if (rank==0) {
-      std::cout <<      "# item file    : " << FLAGS_item << std::endl;
-      if (FLAGS_pos == "") std::cout << "# pos num: " << FLAGS_posnum << std::endl;
-      else std::cout << "# positive file: " << FLAGS_pos << std::endl;
-    }
+		if (rank == 0) {
+			std::cout << "# item file    : " << FLAGS_item << std::endl;
+			if (FLAGS_pos == "")
+				std::cout << "# pos num: " << FLAGS_posnum << std::endl;
+			else
+				std::cout << "# positive file: " << FLAGS_pos << std::endl;
+		}
 
-    Timer::GetInstance()->Start();
+		Timer::GetInstance()->Start();
 
-    MP_LAMP * search;
-    try
-    {
-      // (int rank, int nu_proc, int n, bool n_is_ms, int w, int l, int m)
-      //MP_LAMP search(rank, nu_proc, FLAGS_n, FLAGS_n_is_ms, FLAGS_w, FLAGS_l, FLAGS_m);
-      search = new MP_LAMP(rank, nu_proc, FLAGS_n, FLAGS_n_is_ms, FLAGS_w, FLAGS_l, FLAGS_m);
-    }
-    catch(std::bad_alloc& exc)
-    {
-      std::cout << "MP_LAMP constructor at rank: " << rank
-                << "\tbad_alloc caught: " << exc.what() << std::endl;
-      delete search;
-      MPI_Abort(MPI_COMM_WORLD, 1);
-      return 1;
-    }
+		MP_LAMP * search;
+		try {
+			// (int rank, int nu_proc, int n, bool n_is_ms, int w, int l, int m)
+			//MP_LAMP search(rank, nu_proc, FLAGS_n, FLAGS_n_is_ms, FLAGS_w, FLAGS_l, FLAGS_m);
+			search = new MP_LAMP(rank, nu_proc, FLAGS_n, FLAGS_n_is_ms, FLAGS_w,
+					FLAGS_l, FLAGS_m);
+		} catch (std::bad_alloc& exc) {
+			std::cout << "MP_LAMP constructor at rank: " << rank
+					<< "\tbad_alloc caught: " << exc.what() << std::endl;
+			delete search;
+			MPI_Abort(MPI_COMM_WORLD, 1);
+			return 1;
+		}
 
-    try
-    {
-      if (FLAGS_pos != "") {
-        if (rank==0) {
-          std::ifstream item_file, positive_file;
-          item_file.open(FLAGS_item.c_str(), std::ios::in);
-          if (item_file.fail())
-            throw std::runtime_error(std::string("file not found: ") + FLAGS_item);
-          positive_file.open(FLAGS_pos.c_str(), std::ios::in);
-          if (positive_file.fail())
-            throw std::runtime_error(std::string("file not found: ") + FLAGS_pos);
+		try {
+			if (FLAGS_pos != "") {
+				if (rank == 0) {
+					std::ifstream item_file, positive_file;
+					item_file.open(FLAGS_item.c_str(), std::ios::in);
+					if (item_file.fail())
+						throw std::runtime_error(
+								std::string("file not found: ") + FLAGS_item);
+					positive_file.open(FLAGS_pos.c_str(), std::ios::in);
+					if (positive_file.fail())
+						throw std::runtime_error(
+								std::string("file not found: ") + FLAGS_pos);
 
-          search->InitDatabaseRoot(item_file, positive_file);
-          item_file.close();
-          positive_file.close();
-        } else {
-          search->InitDatabaseSub(true);
-        }
-      } else {
-        if (rank==0) {
-          std::ifstream item_file;
-          item_file.open(FLAGS_item.c_str(), std::ios::in);
-          if (item_file.fail())
-            throw std::runtime_error(std::string("file not found: ") + FLAGS_item);
+					search->InitDatabaseRoot(item_file, positive_file);
+					item_file.close();
+					positive_file.close();
+				} else {
+					search->InitDatabaseSub(true);
+				}
+			} else {
+				if (rank == 0) {
+					std::ifstream item_file;
+					item_file.open(FLAGS_item.c_str(), std::ios::in);
+					if (item_file.fail())
+						throw std::runtime_error(
+								std::string("file not found: ") + FLAGS_item);
 
-          search->InitDatabaseRoot(item_file, FLAGS_posnum);
-          item_file.close();
-        } else {
-          search->InitDatabaseSub(false);
-        }
-      }
-    }
-    catch(std::bad_alloc& exc)
-    {
-      std::cout << "MP_LAMP InitDatabase at rank: " << rank
-                << "\tbad_alloc caught: " << exc.what() << std::endl;
-      delete search;
-      MPI_Abort(MPI_COMM_WORLD, 1);
-      return 1;
-    }
-    catch(std::runtime_error & err)
-    {
-      std::cout << err.what() << std::endl;
-      delete search;
-      MPI_Abort(MPI_COMM_WORLD, 1);
-      return 1;
-    }
+					search->InitDatabaseRoot(item_file, FLAGS_posnum);
+					item_file.close();
+				} else {
+					search->InitDatabaseSub(false);
+				}
+			}
+		} catch (std::bad_alloc& exc) {
+			std::cout << "MP_LAMP InitDatabase at rank: " << rank
+					<< "\tbad_alloc caught: " << exc.what() << std::endl;
+			delete search;
+			MPI_Abort(MPI_COMM_WORLD, 1);
+			return 1;
+		} catch (std::runtime_error & err) {
+			std::cout << err.what() << std::endl;
+			delete search;
+			MPI_Abort(MPI_COMM_WORLD, 1);
+			return 1;
+		}
 
-    if (rank==0) search->PrintDBInfo(std::cout);
+		if (rank == 0)
+			search->PrintDBInfo(std::cout);
 
-    search_start_time = Timer::GetInstance()->Elapsed();
-    try
-    {
-      if (FLAGS_straw1) search->SearchStraw1();
-      else search->Search();
-    }
-    catch(std::bad_alloc& exc)
-    {
-      std::cout << "MP_LAMP Search at rank: " << rank
-                << "\tbad_alloc caught: " << exc.what() << std::endl;
-      delete search;
-      MPI_Abort(MPI_COMM_WORLD, 1);
-      return 1;
-    }
-    search_end_time = Timer::GetInstance()->Elapsed();
+		search_start_time = Timer::GetInstance()->Elapsed();
+		try {
+			if (FLAGS_straw1) {
+//				search->SearchStraw1();
+				printf("Whatever Straw means i am not going to run it.\n");
+			} else {
+				search->Search();
+			}
+		} catch (std::bad_alloc& exc) {
+			std::cout << "MP_LAMP Search at rank: " << rank
+					<< "\tbad_alloc caught: " << exc.what() << std::endl;
+			delete search;
+			MPI_Abort(MPI_COMM_WORLD, 1);
+			return 1;
+		}
+		search_end_time = Timer::GetInstance()->Elapsed();
 
-    if (rank==0)
-      std::cout << "# time all="
-                << std::setw(12) << search_end_time / GIGA
-                << "\ttime search=" << std::setw(12)
-                << (search_end_time - search_start_time) / GIGA
-                << std::endl;
-    if (rank==0) {
-      search->PrintResults(std::cout);
-      //if (FLAGS_log) search->PrintLog(std::cout);
-      if (FLAGS_log) search->PrintAggrLog(std::cout);
-      if (FLAGS_log) search->PrintAggrPLog(std::cout);
-    }
+		if (rank == 0)
+			std::cout << "# time all=" << std::setw(12)
+					<< search_end_time / GIGA << "\ttime search="
+					<< std::setw(12)
+					<< (search_end_time - search_start_time) / GIGA
+					<< std::endl;
+		if (rank == 0) {
+			search->PrintResults(std::cout);
+			//if (FLAGS_log) search->PrintLog(std::cout);
+			if (FLAGS_log)
+				search->PrintAggrLog(std::cout);
+			if (FLAGS_log)
+				search->PrintAggrPLog(std::cout);
+		}
 
-    search->ClearTasks();
-    MPI_Barrier( MPI_COMM_WORLD );
-    delete search;
-  }
+		search->ClearTasks();
+		MPI_Barrier( MPI_COMM_WORLD);
+		delete search;
+	}
 
-  MPI_Finalize();
-  return 0;
+	MPI_Finalize();
+	return 0;
 }
 
 /* Local Variables:  */

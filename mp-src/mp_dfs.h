@@ -133,10 +133,10 @@ public:
 	void Search();
 //	void MainLoop();
 
-	void SearchStraw1(); // no workload distribution
-	void MainLoopStraw1();
-	void SearchStraw2(); // centralized queue
-	void MainLoopStraw2();
+//	void SearchStraw1(); // no workload distribution
+//	void MainLoopStraw1();
+//	void SearchStraw2(); // centralized queue
+//	void MainLoopStraw2();
 
 	const Database<uint64> & GetDatabase() {
 		return *d_;
@@ -170,14 +170,33 @@ public:
 //		Log *log_;
 //		Timer * timer_;
 	};
+
 	struct GetMinSupData {
-		GetMinSupData(int lambda_max, int lambda, long long int* cs_thr) :
-				lambda_max_(lambda_max), lambda_(lambda), cs_thr_(cs_thr) {
+		GetMinSupData(int lambda_max, int lambda, long long int* cs_thr
+//				,
+//				long long int * dtd_accum_array_base,
+//				long long int * accum_array,
+//				long long int * dtd_accum_recv_base, long long int * accum_recv
+				) :
+				lambda_max_(lambda_max), lambda_(lambda), cs_thr_(cs_thr)
+//		, dtd_accum_array_base_(
+//						dtd_accum_array_base), accum_array_(accum_array), dtd_accum_recv_base_(
+//						dtd_accum_recv_base), accum_recv_(accum_recv)
+		{
 		}
+		;
 		int lambda_max_;
 		int lambda_;
 		long long int * cs_thr_;
-
+//		// 0: count, 1: time warp, 2: empty flag, 3--: array
+//		long long int * dtd_accum_array_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
+//		// -3: count, -2: time warp, -1: empty flag, 0--: array
+//		long long int * accum_array_; // int array of [0...lambda_max_] (size lambda_max_+1)
+//
+//		// 0: count, 1: time warp, 2: empty flag, 3--: array
+//		long long int * dtd_accum_recv_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
+//		// -3: count, -2: time warp, -1: empty flag, 0--: array
+//		long long int * accum_recv_; // int array of [0...lambda_max_] (size lambda_max_+1)
 	};
 	struct GetTestableData {
 		GetTestableData(VariableLengthItemsetStack * freq_stack,
@@ -242,10 +261,12 @@ private:
 
 	double sig_level_; // initially set to 1. set to 0.05 (FLAGS_a) / cs_thr_[global_sup_thr_-1] // LAMP
 
-	void CheckCSThreshold(); // getMinSup
+	void CheckCSThreshold(MPI_Data& mpi_data); // getMinSup
+//	void CheckCSThreshold(GetMinSupData* getminsup_data); // getMinSup
 
 	bool ExceedCsThr() const; // getMinSup
 	int NextLambdaThr() const; // getMinSup
+//	int NextLambdaThr(GetMinSupData* getminsup_data) const; // getMinSup
 	void IncCsAccum(int sup_num); // getMinSup
 	double GetInterimSigLevel(int lambda) const; // LAMP
 
@@ -276,7 +297,7 @@ private:
 	VariableLengthItemsetStack * give_stack_;
 
 	// periodic closed set count reduce.
-	void Probe();
+	void Probe(MPI_Data& mpi_data);
 
 	// void ProbeAccumTask();
 	// void ProbeBasicTask();
@@ -284,14 +305,14 @@ private:
 
 	// first, send to random thief and then to lifeline theives
 	// random thief has higher priority
-	void Distribute();
+	void Distribute(MPI_Data& mpi_data);
 
-	void Give(VariableLengthItemsetStack * st, int steal_num);
+	void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int steal_num);
 
-	void Deal();
+	void Deal(MPI_Data& mpi_data);
 
 	// send reject to remaining requests
-	void Reject();
+	void Reject(MPI_Data& mpi_data);
 
 	// set this in steal, reset this in RecvGive and RecvReject
 	// small difference from x10 implementation
@@ -304,7 +325,7 @@ private:
 	// how about prepare int steal_id_; and do steal_id_++/ steal_id_ %= z ?
 	// note:
 	// don't send multiple requests at once
-	void Steal();
+	void Steal(MPI_Data& mpi_data);
 	// Steal needs change from x10 because of "bool waiting"
 	// Steal sends one request each time it is called
 	// there should be steal_state and counters c_r and c_l (random and lifeline)
@@ -319,7 +340,7 @@ private:
 	// 6, if c_l >= z, c_l = 0, set state RANDOM and return
 
 	// steal with probe
-	void Steal2();
+//	void Steal2();
 
 	// will be false if w random steal and all lifeline steal finished
 	// will be true if RecvGive
@@ -329,28 +350,29 @@ private:
 	// control
 
 	// 0: count, 1: time warp flag, 2: empty flag
-	void SendDTDRequest();
-	void RecvDTDRequest(int src);
+	void SendDTDRequest(MPI_Data& mpi_data);
+	void RecvDTDRequest(MPI_Data& mpi_data,int src);
 
-	bool DTDReplyReady() const;
-	void DTDCheck();
+	bool DTDReplyReady(MPI_Data& mpi_data) const;
+	void DTDCheck(MPI_Data& mpi_data);
 
 	// 0: count, 1: time warp flag, 2: empty flag
-	void SendDTDReply();
-	void RecvDTDReply(int src);
+	void SendDTDReply(MPI_Data& mpi_data);
+	void RecvDTDReply(MPI_Data& mpi_data, int src);
 
-	bool DTDAccumReady() const;
-
-	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendDTDAccumRequest();
-	void RecvDTDAccumRequest(int src);
+	bool DTDAccumReady(MPI_Data& mpi_data) const;
 
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendDTDAccumReply();
-	void RecvDTDAccumReply(int src);
+	void SendDTDAccumRequest(MPI_Data& mpi_data);
+	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
 
-	void SendBcastFinish();
-	void RecvBcastFinish(int src);
+	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+	void SendDTDAccumReply(MPI_Data& mpi_data);
+	void RecvDTDAccumReply(MPI_Data& mpi_data,
+			int src);
+
+	void SendBcastFinish(MPI_Data& mpi_data);
+	void RecvBcastFinish(MPI_Data& mpi_data, int src);
 
 	//--------
 
@@ -360,22 +382,22 @@ private:
 	// basic
 
 	// send recv functions
-	void SendRequest(int dst, int is_lifeline); // for random thieves, is_lifeline = -1
-	void RecvRequest(int src);
+	void SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline); // for random thieves, is_lifeline = -1
+	void RecvRequest(MPI_Data& mpi_data, int src);
 
 	// 0: time zone, 1: is_lifeline
-	void SendReject(int dst);
-	void RecvReject(int src);
+	void SendReject(MPI_Data& mpi_data, int dst);
+	void RecvReject(MPI_Data& mpi_data, int src);
 
 	// 1: time zone
-	void SendGive(VariableLengthItemsetStack * st, int dst, int is_lifeline);
+	void SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int dst, int is_lifeline);
 
 	// sets lifelines_activated_ = false
 	// lifelines_activated_ becomes false only in this case (reject does NOT)
-	void RecvGive(int src, MPI_Status status);
+	void RecvGive(MPI_Data& mpi_data, int src, MPI_Status status);
 
-	void SendLambda(int lambda);
-	void RecvLambda(int src);
+	void SendLambda(MPI_Data& mpi_data, int lambda);
+	void RecvLambda(MPI_Data& mpi_data, int src);
 
 	// 0: time zone
 	// search for depth 1 and get initial lambda
@@ -387,8 +409,8 @@ private:
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 			long long int start_time);
 
-	bool ProcessNodeStraw1(int n);
-	bool ProcessNodeStraw2(int n);
+//	bool ProcessNodeStraw1(int n);
+//	bool ProcessNodeStraw2(int n);
 
 	int itemset_buf_[VariableLengthItemsetStack::kMaxItemsPerSet];
 	uint64 * sup_buf_, *child_sup_buf_;
@@ -419,13 +441,13 @@ private:
 
 	// void ProbeThirdPhaseTask();
 
-	bool AccumCountReady() const;
+	bool AccumCountReady(MPI_Data& mpi_data) const;
 
-	void SendResultRequest();
-	void RecvResultRequest(int src);
+	void SendResultRequest(MPI_Data& mpi_data);
+	void RecvResultRequest(MPI_Data& mpi_data,int src);
 
-	void SendResultReply();
-	void RecvResultReply(int src, MPI_Status status);
+	void SendResultReply(MPI_Data& mpi_data);
+	void RecvResultReply(MPI_Data& mpi_data,int src, MPI_Status status);
 
 	void ExtractSignificantSet();
 
@@ -440,7 +462,7 @@ private:
 	double final_sig_level_;
 
 	// true if bcast_targets_ are all -1
-	bool IsLeaf() const;
+	bool IsLeaf(MPI_Data& mpi_data) const;
 
 	// return flag. if (flag), it is ready to receive
 	int CallIprobe(MPI_Status * status, int * count, int * src);

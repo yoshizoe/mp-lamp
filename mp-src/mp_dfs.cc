@@ -93,7 +93,8 @@ const int MP_LAMP::k_probe_period = 128;
 
 MP_LAMP::MP_LAMP(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
 		int m) :
-		mpi_data_(rank, nu_proc, n, n_is_ms, w, l, m), dtd_(k_echo_tree_branch), d_(
+		mpi_data_(FLAGS_bsend_buffer_size, rank, nu_proc, n, n_is_ms, w, l, m,
+				k_echo_tree_branch), dtd_(k_echo_tree_branch), d_(
 		NULL), g_(NULL), bsh_(NULL), timer_(Timer::GetInstance()), cs_thr_(
 		NULL), dtd_accum_array_base_(
 		NULL), accum_array_(NULL), dtd_accum_recv_base_(NULL), accum_recv_(
@@ -111,73 +112,18 @@ MP_LAMP::MP_LAMP(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
 		;);
 	}
 
-	mpi_data_.bsend_buffer_ = new int[FLAGS_bsend_buffer_size];
-
-	int ret = MPI_Buffer_attach(mpi_data_.bsend_buffer_,
-			FLAGS_bsend_buffer_size * sizeof(int));
-	if (ret != MPI_SUCCESS) {
-		throw std::bad_alloc();
-	}
-	printf("bsend_buffer\n");
+//	mpi_data_.bsend_buffer_ = new int[FLAGS_bsend_buffer_size];
+//
+//	int ret = MPI_Buffer_attach(mpi_data_.bsend_buffer_,
+//			FLAGS_bsend_buffer_size * sizeof(int));
+//	if (ret != MPI_SUCCESS) {
+//		throw std::bad_alloc();
+//	}
+//	printf("bsend_buffer\n");
 
 // note: should remove victim if in lifeline ???
-	mpi_data_.victims_ = new int[mpi_data_.nRandStealCands_];
-	if (mpi_data_.nTotalProc_ > 1) {
-		for (int pi = 0; pi < mpi_data_.nRandStealCands_; pi++) {
-			int r;
-			while (true) {
-				r = mpi_data_.rand_p_();
-				if (r != mpi_data_.mpiRank_)
-					break;
-			}
-			mpi_data_.victims_[pi] = r;
-		}
-	}
-	printf("victims\n");
 
-	mpi_data_.lifelines_ = new int[mpi_data_.hypercubeDimension_];
-	for (int zi = 0; zi < mpi_data_.hypercubeDimension_; zi++)
-		mpi_data_.lifelines_[zi] = -1;
 
-// lifeline initialization
-// cf. Saraswat et al. "Lifeline-Based Global Load Balancing", PPoPP 2008.
-	int radix = 1;
-	int lifeline_buddy_id = 0;
-	for (int j = 0; j < mpi_data_.hypercubeDimension_; j++) { // for each dimension
-		int next_radix = radix * mpi_data_.lHypercubeEdge_;
-
-		for (int k = 1; k < mpi_data_.lHypercubeEdge_; k++) { // loop over an edge of the hypercube
-			int base = mpi_data_.mpiRank_ - mpi_data_.mpiRank_ % next_radix; // lowest in the current ring
-			int index = (mpi_data_.mpiRank_ + next_radix - radix) % next_radix;
-			int lifeline_buddy = base + index; // previous in the current ring
-			if (lifeline_buddy < mpi_data_.nTotalProc_) {
-				mpi_data_.lifelines_[lifeline_buddy_id++] = lifeline_buddy;
-				break;
-			}
-		}
-		radix *= mpi_data_.lHypercubeEdge_;
-	}
-
-	printf("topology\n");
-
-	mpi_data_.thieves_ = new FixedSizeStack(mpi_data_.nTotalProc_);
-	mpi_data_.lifeline_thieves_ = new FixedSizeStack(
-			mpi_data_.hypercubeDimension_ + k_echo_tree_branch);
-	mpi_data_.lifelines_activated_ = new bool[mpi_data_.nTotalProc_];
-	mpi_data_.accum_flag_ = new bool[k_echo_tree_branch];
-	mpi_data_.bcast_targets_ = new int[k_echo_tree_branch];
-
-	for (int pi = 0; pi < mpi_data_.nTotalProc_; pi++)
-		mpi_data_.lifelines_activated_[pi] = false;
-
-	mpi_data_.bcast_source_ = -1;
-	mpi_data_.echo_waiting_ = false;
-
-	for (std::size_t i = 0; i < k_echo_tree_branch; i++) {
-		mpi_data_.bcast_targets_[i] = -1;
-		mpi_data_.accum_flag_[i] = false;
-	}
-	printf("mpidata\n");
 
 	dtd_.Init();
 
@@ -306,6 +252,7 @@ MP_LAMP::~MP_LAMP() {
 		DBG(lfs_.close()
 		;);
 	}
+
 }
 
 void MP_LAMP::InitDatabaseRoot(std::istream & is1, std::istream & is2) {
@@ -665,7 +612,7 @@ void MP_LAMP::ClearTasks() {
 
 //==============================================================================
 
-void MP_LAMP::Probe() {
+void MP_LAMP::Probe(MPI_Data& mpi_data) {
 	DBG(D(3) << "Probe" << std::endl
 	;);
 	MPI_Status probe_status;
@@ -684,47 +631,47 @@ void MP_LAMP::Probe() {
 		switch (probe_tag) {
 		// control tasks
 		case Tag::DTD_REQUEST:
-			RecvDTDRequest(probe_src);
+			RecvDTDRequest(mpi_data, probe_src);
 			break;
 		case Tag::DTD_REPLY:
-			RecvDTDReply(probe_src);
+			RecvDTDReply(mpi_data, probe_src);
 			break;
 
 		case Tag::DTD_ACCUM_REQUEST:
 			assert(phase_ == 1);
-			RecvDTDAccumRequest(probe_src);
+			RecvDTDAccumRequest(mpi_data, probe_src);
 			break;
 		case Tag::DTD_ACCUM_REPLY:
 			assert(phase_ == 1);
-			RecvDTDAccumReply(probe_src);
+			RecvDTDAccumReply(mpi_data, probe_src);
 			break;
 
 		case Tag::BCAST_FINISH:
-			RecvBcastFinish(probe_src);
+			RecvBcastFinish(mpi_data, probe_src);
 			break;
 
 // basic tasks
 		case Tag::LAMBDA:
 			assert(phase_ == 1);
-			RecvLambda(probe_src);
+			RecvLambda(mpi_data, probe_src);
 			break;
 
 		case Tag::REQUEST:
-			RecvRequest(probe_src);
+			RecvRequest(mpi_data, probe_src);
 			break;
 		case Tag::REJECT:
-			RecvReject(probe_src);
+			RecvReject(mpi_data, probe_src);
 			break;
 		case Tag::GIVE:
-			RecvGive(probe_src, probe_status);
+			RecvGive(mpi_data, probe_src, probe_status);
 			break;
 
 // third phase tasks
 		case Tag::RESULT_REQUEST:
-			RecvResultRequest(probe_src);
+			RecvResultRequest(mpi_data, probe_src);
 			break;
 		case Tag::RESULT_REPLY:
-			RecvResultReply(probe_src, probe_status);
+			RecvResultReply(mpi_data, probe_src, probe_status);
 			break;
 		default:
 			DBG(
@@ -744,17 +691,17 @@ void MP_LAMP::Probe() {
 		log_.TakePeriodicLog(node_stack_->NuItemset(), lambda_, phase_);
 	}
 
-	if (mpi_data_.mpiRank_ == 0) {
+	if (mpi_data.mpiRank_ == 0) {
 		// initiate termination detection
 
 		// note: for phase_ 1, accum request and dtd request are unified
-		if (!mpi_data_.echo_waiting_ && !dtd_.terminated_) {
+		if (!mpi_data.echo_waiting_ && !dtd_.terminated_) {
 			if (phase_ == 1) {
-				SendDTDAccumRequest();
+				SendDTDAccumRequest(mpi_data);
 				// log_.d_.dtd_accum_request_num_++;
 			} else if (phase_ == 2) {
 				if (node_stack_->Empty()) {
-					SendDTDRequest();
+					SendDTDRequest(mpi_data);
 					// log_.d_.dtd_request_num_++;
 				}
 			} else {
@@ -770,28 +717,28 @@ void MP_LAMP::Probe() {
 }
 
 // call this from root rank to start DTD
-void MP_LAMP::SendDTDRequest() {
+void MP_LAMP::SendDTDRequest(MPI_Data& mpi_data) {
 	int message[1];
 	message[0] = 1; // dummy
 
-	mpi_data_.echo_waiting_ = true;
+	mpi_data.echo_waiting_ = true;
 
 	for (int i = 0; i < k_echo_tree_branch; i++) {
-		if (mpi_data_.bcast_targets_[i] < 0)
+		if (mpi_data.bcast_targets_[i] < 0)
 			break;
 		assert(
-				mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_
+				mpi_data.bcast_targets_[i] < mpi_data.nTotalProc_
 						&& "SendDTDRequest");
-		CallBsend(message, 1, MPI_INT, mpi_data_.bcast_targets_[i],
+		CallBsend(message, 1, MPI_INT, mpi_data.bcast_targets_[i],
 				Tag::DTD_REQUEST);
 		DBG(
-				D(3) << "SendDTDRequest: dst=" << mpi_data_.bcast_targets_[i]
+				D(3) << "SendDTDRequest: dst=" << mpi_data.bcast_targets_[i]
 						<< "\ttimezone=" << dtd_.time_zone_ << std::endl
 				;);
 	}
 }
 
-void MP_LAMP::RecvDTDRequest(int src) {
+void MP_LAMP::RecvDTDRequest(MPI_Data& mpi_data, int src) {
 	DBG(
 			D(3) << "RecvDTDRequest: src=" << src << "\ttimezone="
 					<< dtd_.time_zone_ << std::endl
@@ -800,56 +747,55 @@ void MP_LAMP::RecvDTDRequest(int src) {
 	int message[1];
 	CallRecv(&message, 1, MPI_INT, src, Tag::DTD_REQUEST, &recv_status);
 
-	if (IsLeaf())
-		SendDTDReply();
+	if (IsLeaf(mpi_data))
+		SendDTDReply(mpi_data);
 	else
-		SendDTDRequest();
+		SendDTDRequest(mpi_data);
 }
 
-bool MP_LAMP::DTDReplyReady() const {
+bool MP_LAMP::DTDReplyReady(MPI_Data& mpi_data) const {
 	for (int i = 0; i < k_echo_tree_branch; i++)
-		if (mpi_data_.bcast_targets_[i] >= 0 && !(dtd_.accum_flag_[i]))
+		if (mpi_data.bcast_targets_[i] >= 0 && !(dtd_.accum_flag_[i]))
 			return false;
 	return true;
 	// check only valid bcast_targets_
 	// always true if leaf
 }
 
-void MP_LAMP::SendDTDReply() {
+void MP_LAMP::SendDTDReply(MPI_Data& mpi_data) {
 	int message[3];
 	// using reduced vars
 	message[0] = dtd_.count_ + dtd_.reduce_count_;
 	bool tw_flag = dtd_.time_warp_ || dtd_.reduce_time_warp_;
 	message[1] = (tw_flag ? 1 : 0);
 	// for Steal
-	dtd_.not_empty_ = !(node_stack_->Empty())
-			|| (mpi_data_.thieves_->Size() > 0) || stealer_.StealStarted()
-			|| mpi_data_.processing_node_; // thieves_ and stealer state check
+	dtd_.not_empty_ = !(node_stack_->Empty()) || (mpi_data.thieves_->Size() > 0)
+			|| stealer_.StealStarted() || mpi_data.processing_node_; // thieves_ and stealer state check
 	// for Steal2
 	// dtd_.not_empty_ =
 	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
-	//     waiting_ || mpi_data_.processing_node_;
+	//     waiting_ || mpi_data.processing_node_;
 	bool em_flag = dtd_.not_empty_ || dtd_.reduce_not_empty_;
 	message[2] = (em_flag ? 1 : 0);
 	DBG(
-			D(3) << "SendDTDReply: dst = " << mpi_data_.bcast_source_
+			D(3) << "SendDTDReply: dst = " << mpi_data.bcast_source_
 					<< "\tcount=" << message[0] << "\ttw=" << tw_flag << "\tem="
 					<< em_flag << std::endl
 			;);
 
-	assert(mpi_data_.bcast_source_ < mpi_data_.nTotalProc_ && "SendDTDReply");
-	CallBsend(message, 3, MPI_INT, mpi_data_.bcast_source_, Tag::DTD_REPLY);
+	assert(mpi_data.bcast_source_ < mpi_data.nTotalProc_ && "SendDTDReply");
+	CallBsend(message, 3, MPI_INT, mpi_data.bcast_source_, Tag::DTD_REPLY);
 
 	dtd_.time_warp_ = false;
 	dtd_.not_empty_ = false;
 	dtd_.IncTimeZone();
 
-	mpi_data_.echo_waiting_ = false;
+	mpi_data.echo_waiting_ = false;
 	dtd_.ClearAccumFlags();
 	dtd_.ClearReduceVars();
 }
 
-void MP_LAMP::RecvDTDReply(int src) {
+void MP_LAMP::RecvDTDReply(MPI_Data& mpi_data, int src) {
 	MPI_Status recv_status;
 	int message[3];
 	CallRecv(&message, 3, MPI_INT, src, Tag::DTD_REPLY, &recv_status);
@@ -868,7 +814,7 @@ void MP_LAMP::RecvDTDReply(int src) {
 
 	bool flag = false;
 	for (int i = 0; i < k_echo_tree_branch; i++) {
-		if (mpi_data_.bcast_targets_[i] == src) {
+		if (mpi_data.bcast_targets_[i] == src) {
 			flag = true;
 			dtd_.accum_flag_[i] = true;
 			break;
@@ -876,39 +822,39 @@ void MP_LAMP::RecvDTDReply(int src) {
 	}
 	assert(flag);
 
-	if (DTDReplyReady()) {
-		if (mpi_data_.mpiRank_ == 0) {
-			DTDCheck(); // at root
+	if (DTDReplyReady(mpi_data)) {
+		if (mpi_data.mpiRank_ == 0) {
+			DTDCheck(mpi_data); // at root
 			log_.d_.dtd_phase_num_++;
 		} else
-			SendDTDReply();
+			SendDTDReply(mpi_data);
 	}
 }
 
-void MP_LAMP::SendDTDAccumRequest() {
+void MP_LAMP::SendDTDAccumRequest(MPI_Data& mpi_data) {
 	int message[1];
 	message[0] = 1; // dummy
 
-	mpi_data_.echo_waiting_ = true;
+	mpi_data.echo_waiting_ = true;
 
 	for (int i = 0; i < k_echo_tree_branch; i++) {
-		if (mpi_data_.bcast_targets_[i] < 0)
+		if (mpi_data.bcast_targets_[i] < 0)
 			break;
 		assert(
-				mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_
+				mpi_data.bcast_targets_[i] < mpi_data.nTotalProc_
 						&& "SendDTDAccumRequest");
-		CallBsend(message, 1, MPI_INT, mpi_data_.bcast_targets_[i],
+		CallBsend(message, 1, MPI_INT, mpi_data.bcast_targets_[i],
 				Tag::DTD_ACCUM_REQUEST);
 
 		DBG(
 				D(3) << "SendDTDAccumRequest: dst="
-						<< mpi_data_.bcast_targets_[i] << "\ttimezone="
+						<< mpi_data.bcast_targets_[i] << "\ttimezone="
 						<< dtd_.time_zone_ << std::endl
 				;);
 	}
 }
 
-void MP_LAMP::RecvDTDAccumRequest(int src) {
+void MP_LAMP::RecvDTDAccumRequest(MPI_Data& mpi_data, int src) {
 	DBG(
 			D(3) << "RecvDTDAccumRequest: src=" << src << "\ttimezone="
 					<< dtd_.time_zone_ << std::endl
@@ -917,44 +863,43 @@ void MP_LAMP::RecvDTDAccumRequest(int src) {
 	int message[1];
 	CallRecv(&message, 1, MPI_INT, src, Tag::DTD_ACCUM_REQUEST, &recv_status);
 
-	if (IsLeaf())
-		SendDTDAccumReply();
+	if (IsLeaf(mpi_data))
+		SendDTDAccumReply(mpi_data);
 	else
-		SendDTDAccumRequest();
+		SendDTDAccumRequest(mpi_data);
 }
 
-void MP_LAMP::SendDTDAccumReply() {
+void MP_LAMP::SendDTDAccumReply(MPI_Data& mpi_data) {
 	dtd_accum_array_base_[0] = dtd_.count_ + dtd_.reduce_count_;
 	bool tw_flag = dtd_.time_warp_ || dtd_.reduce_time_warp_;
 	dtd_accum_array_base_[1] = (tw_flag ? 1 : 0);
 	// for Steal
-	dtd_.not_empty_ = !(node_stack_->Empty())
-			|| (mpi_data_.thieves_->Size() > 0) || stealer_.StealStarted()
-			|| mpi_data_.processing_node_; // thieves_ and stealer state check
+	dtd_.not_empty_ = !(node_stack_->Empty()) || (mpi_data.thieves_->Size() > 0)
+			|| stealer_.StealStarted() || mpi_data.processing_node_; // thieves_ and stealer state check
 	// for Steal2
 	// dtd_.not_empty_ =
 	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
-	//     waiting_ || mpi_data_.processing_node_;
+	//     waiting_ || mpi_data.processing_node_;
 	bool em_flag = dtd_.not_empty_ || dtd_.reduce_not_empty_;
 	dtd_accum_array_base_[2] = (em_flag ? 1 : 0);
 
 	DBG(
-			D(3) << "SendDTDAccumReply: dst = " << mpi_data_.bcast_source_
+			D(3) << "SendDTDAccumReply: dst = " << mpi_data.bcast_source_
 					<< "\tcount=" << dtd_accum_array_base_[0] << "\ttw="
 					<< tw_flag << "\tem=" << em_flag << std::endl
 			;);
 
 	assert(
-			mpi_data_.bcast_source_ < mpi_data_.nTotalProc_
+			mpi_data.bcast_source_ < mpi_data.nTotalProc_
 					&& "SendDTDAccumReply");
 	CallBsend(dtd_accum_array_base_, lambda_max_ + 4, MPI_LONG_LONG_INT,
-			mpi_data_.bcast_source_, Tag::DTD_ACCUM_REPLY);
+			mpi_data.bcast_source_, Tag::DTD_ACCUM_REPLY);
 
 	dtd_.time_warp_ = false;
 	dtd_.not_empty_ = false;
 	dtd_.IncTimeZone();
 
-	mpi_data_.echo_waiting_ = false;
+	mpi_data.echo_waiting_ = false;
 	dtd_.ClearAccumFlags();
 	dtd_.ClearReduceVars();
 
@@ -962,7 +907,7 @@ void MP_LAMP::SendDTDAccumReply() {
 		accum_array_[l] = 0ll;
 }
 
-void MP_LAMP::RecvDTDAccumReply(int src) {
+void MP_LAMP::RecvDTDAccumReply(MPI_Data& mpi_data, int src) {
 	MPI_Status recv_status;
 
 	CallRecv(dtd_accum_recv_base_, lambda_max_ + 4, MPI_LONG_LONG_INT, src,
@@ -988,7 +933,7 @@ void MP_LAMP::RecvDTDAccumReply(int src) {
 
 	bool flag = false;
 	for (int i = 0; i < k_echo_tree_branch; i++) {
-		if (mpi_data_.bcast_targets_[i] == src) {
+		if (mpi_data.bcast_targets_[i] == src) {
 			flag = true;
 			dtd_.accum_flag_[i] = true;
 			break;
@@ -996,32 +941,32 @@ void MP_LAMP::RecvDTDAccumReply(int src) {
 	}
 	assert(flag);
 
-	if (mpi_data_.mpiRank_ == 0) {
+	if (mpi_data.mpiRank_ == 0) {
 		if (ExceedCsThr()) {
 			int new_lambda = NextLambdaThr();
-			SendLambda(new_lambda);
+			SendLambda(mpi_data, new_lambda);
 			lambda_ = new_lambda;
 		}
 		// if SendLambda is called, dtd_.count_ is incremented and DTDCheck will always fail
-		if (DTDReplyReady()) {
-			DTDCheck();
+		if (DTDReplyReady(mpi_data)) {
+			DTDCheck(mpi_data);
 			log_.d_.dtd_accum_phase_num_++;
 		}
 	} else {  // not root
-		if (DTDReplyReady())
-			SendDTDAccumReply();
+		if (DTDReplyReady(mpi_data))
+			SendDTDAccumReply(mpi_data);
 	}
 }
 
-void MP_LAMP::DTDCheck() {
-	assert(mpi_data_.mpiRank_ == 0);
+void MP_LAMP::DTDCheck(MPI_Data& mpi_data) {
+	assert(mpi_data.mpiRank_ == 0);
 	// (count, time_warp, not_empty)
 	dtd_.Reduce(dtd_.count_, dtd_.time_warp_, dtd_.not_empty_);
 
 	if (dtd_.reduce_count_ == 0 && dtd_.reduce_time_warp_ == false
 			&& dtd_.reduce_not_empty_ == false) {
 		// termination
-		SendBcastFinish();
+		SendBcastFinish(mpi_data);
 		dtd_.terminated_ = true;
 		DBG(D(1) << "terminated" << std::endl
 		;);
@@ -1031,36 +976,36 @@ void MP_LAMP::DTDCheck() {
 	dtd_.not_empty_ = false;
 	dtd_.IncTimeZone();
 
-	mpi_data_.echo_waiting_ = false;
+	mpi_data.echo_waiting_ = false;
 	dtd_.ClearAccumFlags();
 	dtd_.ClearReduceVars();
 }
 
-void MP_LAMP::SendBcastFinish() {
+void MP_LAMP::SendBcastFinish(MPI_Data& mpi_data) {
 	DBG(D(2) << "SendBcastFinish" << std::endl
 	;);
 	int message[1];
 	message[0] = 1; // dummy
 
 	for (int i = 0; i < k_echo_tree_branch; i++) {
-		if (mpi_data_.bcast_targets_[i] < 0)
+		if (mpi_data.bcast_targets_[i] < 0)
 			break;
 		assert(
-				mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_
+				mpi_data.bcast_targets_[i] < mpi_data.nTotalProc_
 						&& "SendBcastFinish");
-		CallBsend(message, 1, MPI_INT, mpi_data_.bcast_targets_[i],
+		CallBsend(message, 1, MPI_INT, mpi_data.bcast_targets_[i],
 				Tag::BCAST_FINISH);
 	}
 }
 
-void MP_LAMP::RecvBcastFinish(int src) {
+void MP_LAMP::RecvBcastFinish(MPI_Data& mpi_data, int src) {
 	DBG(D(2) << "RecvBcastFinish: src=" << src << std::endl
 	;);
 	MPI_Status recv_status;
 	int message[1];
 	CallRecv(&message, 1, MPI_INT, src, Tag::BCAST_FINISH, &recv_status);
 
-	SendBcastFinish();
+	SendBcastFinish(mpi_data);
 	dtd_.terminated_ = true;
 	DBG(D(2) << "terminated" << std::endl
 	;);
@@ -1166,8 +1111,10 @@ void MP_LAMP::Search() {
 						<< (timer_->Elapsed() - log_.d_.search_start_time_)
 								/ GIGA << std::endl
 				;);
-
-		getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_); // The name Phase1 is already so nonsense...
+		getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_);
+//		getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_,
+//				dtd_accum_array_base_, accum_array_, dtd_accum_recv_base_,
+//				accum_recv_); // The name Phase1 is already so nonsense...
 		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
 		lambda_max_ = getminsup_data_->lambda_max_;
 		lambda_ = getminsup_data_->lambda_;
@@ -1364,300 +1311,300 @@ void MP_LAMP::Search() {
 	//ClearTasks();
 }
 
-void MP_LAMP::SearchStraw1() {
-	log_.d_.search_start_time_ = timer_->Elapsed();
-	total_expand_num_ = 0ll;
-
-	// --------
-	// preprocess
-	CheckPoint();
-
-	expand_num_ = 0ll;
-	closed_set_num_ = 0ll;
-
-	lambda_ = 1;
-
-	{
-		// push root state to stack
-		int * root_itemset;
-		node_stack_->PushPre();
-		root_itemset = node_stack_->Top();
-		node_stack_->SetSup(root_itemset, lambda_max_);
-		node_stack_->PushPostNoSort();
-	}
-
-	PreProcessRootNode();
-	{
-		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "preprocess end\n";
-			std::cout << "# " << "lambda=" << lambda_ << "\tcs_thr[lambda]="
-					<< std::setw(16) << cs_thr_[lambda_];
-			std::cout << "\tpmin_thr[lambda-1]=" << std::setw(12)
-					<< d_->PMin(lambda_ - 1);
-			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
-
-			<< "\telapsed_time="
-					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-					<< std::endl;
-		}
-		DBG(D(2) << "---------------" << std::endl
-		;);
-		DBG(D(1) << "preprocess phase end" << std::endl
-		;);
-		DBG(D(2) << "---------------" << std::endl
-		;);
-		DBG(
-				D(2) << "# " << "preprocess end\n" << "# " << "lambda="
-						<< lambda_ << "\tcs_thr[lambda]=" << std::setw(16)
-						<< cs_thr_[lambda_] << "\tpmin_thr[lambda-1]="
-						<< std::setw(12) << d_->PMin(lambda_ - 1)
-						<< "\tnum_expand=" << std::setw(12) << expand_num_
-						<< "\telapsed_time="
-						<< (timer_->Elapsed() - log_.d_.search_start_time_)
-								/ GIGA << std::endl
-				;);
-	}
-
-	// --------
-	// prepare phase 1
-	phase_ = 1;
-	log_.StartPeriodicLog();
-
-	// for strawman
-	stealer_.Finish();
-	waiting_ = false;
-
-	{
-		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "1st phase start\n";
-			std::cout << "# " << "lambda=" << lambda_
-					<< "\tclosed_set_num[n>=lambda]=" << std::setw(12)
-					<< accum_array_[lambda_] << "\tcs_thr[lambda]="
-					<< std::setw(16) << cs_thr_[lambda_];
-			std::cout << "\tpmin_thr[lambda-1]=" << std::setw(12)
-					<< d_->PMin(lambda_ - 1);
-			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
-
-			<< "\telapsed_time="
-					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-					<< std::endl;
-		}
-		DBG(D(2) << "---------------" << std::endl
-		;);
-		DBG(D(1) << "1st phase start" << std::endl
-		;);
-		DBG(D(2) << "---------------" << std::endl
-		;);
-		DBG(
-				D(2) << "lambda=" << lambda_ << "\tclosed_set_num[n>=lambda]="
-						<< std::setw(12) << accum_array_[lambda_]
-						<< "\tcs_thr[lambda]=" << std::setw(16)
-						<< cs_thr_[lambda_] << "\tpmin_thr[lambda-1]="
-						<< std::setw(12) << d_->PMin(lambda_ - 1)
-						<< "\tnum_expand=" << std::setw(12) << expand_num_
-						<< "\telapsed_time="
-						<< (timer_->Elapsed() - log_.d_.search_start_time_)
-								/ GIGA << std::endl
-				;);
-
-		MainLoopStraw1();
-
-		// todo: reduce expand_num_
-		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "1st phase end\n";
-			std::cout << "# " << "lambda=" << lambda_;
-			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
-
-			<< "\telapsed_time="
-					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-					<< std::endl;
-		}
-		DBG(D(2) << "---------------" << std::endl
-		;);
-		DBG(D(1) << "1st phase end" << std::endl
-		;);
-		DBG(D(2) << "---------------" << std::endl
-		;);
-		DBG(
-				D(2) << "lambda=" << lambda_ << "\tnum_expand=" << std::setw(12)
-						<< expand_num_ << "\telapsed_time="
-						<< (timer_->Elapsed() - log_.d_.search_start_time_)
-								/ GIGA << std::endl
-				;);
-	}
-
-	log_.d_.dtd_accum_phase_per_sec_ = (double) (log_.d_.dtd_accum_phase_num_)
-			/ ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
-
-	// log_.d_.accum_phase_per_sec_ =
-	//     log_.d_.accum_phase_num_ / ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
-
-	// --------
-	// prepare phase 2
-	phase_ = 2;
-	//ClearTasks();
-	CheckPoint();
-
-	// for strawman
-	stealer_.Finish();
-	waiting_ = false;
-
-	lambda_--;
-	CallBcast(&lambda_, 1, MPI_INT);
-	final_support_ = lambda_;
-
-	if (!FLAGS_second_phase) {
-		log_.d_.search_finish_time_ = timer_->Elapsed();
-		log_.GatherLog(mpi_data_.nTotalProc_);
-		DBG(D(1) << "log" << std::endl
-		;);
-		DBG(PrintLog(D(1, false))
-		;);
-		DBG(PrintPLog(D(1, false))
-		;);
-		return;
-	}
-
-	expand_num_ = 0ll;
-	closed_set_num_ = 0ll;
-
-	//if (h_ == 0) // pushing to all rank
-	{
-		// push root state to stack
-		int * root_itemset;
-		node_stack_->Clear();
-		node_stack_->PushPre();
-		root_itemset = node_stack_->Top();
-		node_stack_->SetSup(root_itemset, lambda_max_);
-		node_stack_->PushPostNoSort();
-	}
-
-	double int_sig_lev = 0.0;
-	if (mpi_data_.mpiRank_ == 0)
-		int_sig_lev = GetInterimSigLevel(lambda_);
-	// bcast int_sig_lev
-	CallBcast(&int_sig_lev, 1, MPI_DOUBLE);
-
-	// todo: reduce expand_num_
-
-	{
-		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "2nd phase start\n";
-			std::cout << "# " << "lambda=" << lambda_ << "\tint_sig_lev="
-					<< int_sig_lev << "\telapsed_time="
-					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-					<< std::endl;
-		}
-		DBG(D(2) << "---------------" << std::endl
-		;);
-		DBG(D(1) << "2nd phase start" << std::endl
-		;);
-		DBG(D(2) << "---------------" << std::endl
-		;);
-		DBG(
-				D(2) << "lambda=" << lambda_ << "\tint_sig_lev=" << int_sig_lev
-						<< "\telapsed_time="
-						<< (timer_->Elapsed() - log_.d_.search_start_time_)
-								/ GIGA << std::endl
-				;);
-
-		sig_level_ = int_sig_lev;
-		MainLoopStraw1();
-	}
-
-	DBG(D(1) << "closed_set_num=" << closed_set_num_ << std::endl
-	;);
-
-	long long int closed_set_num_reduced;
-	MPI_Reduce(&closed_set_num_, &closed_set_num_reduced, 1, MPI_LONG_LONG_INT,
-	MPI_SUM, 0, MPI_COMM_WORLD);
-
-	DBG(if (mpi_data_.mpiRank_ == 0)
-		D(1) << "closed_set_num_reduced=" << closed_set_num_reduced << std::endl
-		;);
-	if (mpi_data_.mpiRank_ == 0)
-		final_closed_set_num_ = closed_set_num_reduced;
-
-	log_.d_.dtd_phase_per_sec_ = (double) (log_.d_.dtd_phase_num_)
-			/ ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
-
-	MPI_Barrier( MPI_COMM_WORLD);
-	log_.FinishPeriodicLog();
-
-	// todo: gather logs
-
-	{
-		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "2nd phase end\n";
-			std::cout << "# " << "closed_set_num=" << std::setw(12)
-					<< final_closed_set_num_ << "\tsig_lev="
-					<< (FLAGS_a / final_closed_set_num_) << "\tnum_expand="
-					<< std::setw(12) << expand_num_ << "\telapsed_time="
-					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-					<< std::endl;
-		}
-	}
-
-	if (!FLAGS_third_phase) {
-		log_.d_.search_finish_time_ = timer_->Elapsed();
-		log_.GatherLog(mpi_data_.nTotalProc_);
-		DBG(D(1) << "log" << std::endl
-		;);
-		DBG(PrintLog(D(1, false))
-		;);
-		DBG(PrintPLog(D(1, false))
-		;);
-		return;
-	}
-
-	// prepare 3rd phase
-	phase_ = 3;
-	//ClearTasks();
-	CheckPoint(); // needed for reseting dtd_.terminated_
-
-	if (node_stack_)
-		delete node_stack_;
-	node_stack_ = NULL;
-	significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max);
-	// significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
-
-	final_sig_level_ = FLAGS_a / final_closed_set_num_;
-	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
-
-	{
-		MainLoopStraw1();
-	}
-
-	// implement this in main loop
-	// copy only significant itemset to buffer
-	// collect itemset
-	//   can reuse the other stack (needs to compute pval again)
-	//   or prepare simpler data structure
-	if (mpi_data_.mpiRank_ == 0)
-		SortSignificantSets();
-	log_.d_.search_finish_time_ = timer_->Elapsed();
-	MPI_Barrier( MPI_COMM_WORLD);
-
-	{
-		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "3rd phase end\n";
-			std::cout << "# " << "sig_lev=" << final_sig_level_
-					<< "\telapsed_time="
-					<< (log_.d_.search_finish_time_ - log_.d_.search_start_time_)
-							/ GIGA << std::endl;
-		}
-	}
-
-	log_.GatherLog(mpi_data_.nTotalProc_);
-	DBG(D(1) << "log" << std::endl
-	;);
-	DBG(PrintLog(D(1, false))
-	;);
-	DBG(PrintPLog(D(1, false))
-	;);
-
-	//ClearTasks();
-}
+//void MP_LAMP::SearchStraw1() {
+//	log_.d_.search_start_time_ = timer_->Elapsed();
+//	total_expand_num_ = 0ll;
+//
+//	// --------
+//	// preprocess
+//	CheckPoint();
+//
+//	expand_num_ = 0ll;
+//	closed_set_num_ = 0ll;
+//
+//	lambda_ = 1;
+//
+//	{
+//		// push root state to stack
+//		int * root_itemset;
+//		node_stack_->PushPre();
+//		root_itemset = node_stack_->Top();
+//		node_stack_->SetSup(root_itemset, lambda_max_);
+//		node_stack_->PushPostNoSort();
+//	}
+//
+//	PreProcessRootNode();
+//	{
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "preprocess end\n";
+//			std::cout << "# " << "lambda=" << lambda_ << "\tcs_thr[lambda]="
+//					<< std::setw(16) << cs_thr_[lambda_];
+//			std::cout << "\tpmin_thr[lambda-1]=" << std::setw(12)
+//					<< d_->PMin(lambda_ - 1);
+//			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
+//
+//			<< "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+//					<< std::endl;
+//		}
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(D(1) << "preprocess phase end" << std::endl
+//		;);
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(
+//				D(2) << "# " << "preprocess end\n" << "# " << "lambda="
+//						<< lambda_ << "\tcs_thr[lambda]=" << std::setw(16)
+//						<< cs_thr_[lambda_] << "\tpmin_thr[lambda-1]="
+//						<< std::setw(12) << d_->PMin(lambda_ - 1)
+//						<< "\tnum_expand=" << std::setw(12) << expand_num_
+//						<< "\telapsed_time="
+//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
+//								/ GIGA << std::endl
+//				;);
+//	}
+//
+//	// --------
+//	// prepare phase 1
+//	phase_ = 1;
+//	log_.StartPeriodicLog();
+//
+//	// for strawman
+//	stealer_.Finish();
+//	waiting_ = false;
+//
+//	{
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "1st phase start\n";
+//			std::cout << "# " << "lambda=" << lambda_
+//					<< "\tclosed_set_num[n>=lambda]=" << std::setw(12)
+//					<< accum_array_[lambda_] << "\tcs_thr[lambda]="
+//					<< std::setw(16) << cs_thr_[lambda_];
+//			std::cout << "\tpmin_thr[lambda-1]=" << std::setw(12)
+//					<< d_->PMin(lambda_ - 1);
+//			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
+//
+//			<< "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+//					<< std::endl;
+//		}
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(D(1) << "1st phase start" << std::endl
+//		;);
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(
+//				D(2) << "lambda=" << lambda_ << "\tclosed_set_num[n>=lambda]="
+//						<< std::setw(12) << accum_array_[lambda_]
+//						<< "\tcs_thr[lambda]=" << std::setw(16)
+//						<< cs_thr_[lambda_] << "\tpmin_thr[lambda-1]="
+//						<< std::setw(12) << d_->PMin(lambda_ - 1)
+//						<< "\tnum_expand=" << std::setw(12) << expand_num_
+//						<< "\telapsed_time="
+//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
+//								/ GIGA << std::endl
+//				;);
+//
+//		MainLoopStraw1();
+//
+//		// todo: reduce expand_num_
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "1st phase end\n";
+//			std::cout << "# " << "lambda=" << lambda_;
+//			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
+//
+//			<< "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+//					<< std::endl;
+//		}
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(D(1) << "1st phase end" << std::endl
+//		;);
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(
+//				D(2) << "lambda=" << lambda_ << "\tnum_expand=" << std::setw(12)
+//						<< expand_num_ << "\telapsed_time="
+//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
+//								/ GIGA << std::endl
+//				;);
+//	}
+//
+//	log_.d_.dtd_accum_phase_per_sec_ = (double) (log_.d_.dtd_accum_phase_num_)
+//			/ ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
+//
+//	// log_.d_.accum_phase_per_sec_ =
+//	//     log_.d_.accum_phase_num_ / ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
+//
+//	// --------
+//	// prepare phase 2
+//	phase_ = 2;
+//	//ClearTasks();
+//	CheckPoint();
+//
+//	// for strawman
+//	stealer_.Finish();
+//	waiting_ = false;
+//
+//	lambda_--;
+//	CallBcast(&lambda_, 1, MPI_INT);
+//	final_support_ = lambda_;
+//
+//	if (!FLAGS_second_phase) {
+//		log_.d_.search_finish_time_ = timer_->Elapsed();
+//		log_.GatherLog(mpi_data_.nTotalProc_);
+//		DBG(D(1) << "log" << std::endl
+//		;);
+//		DBG(PrintLog(D(1, false))
+//		;);
+//		DBG(PrintPLog(D(1, false))
+//		;);
+//		return;
+//	}
+//
+//	expand_num_ = 0ll;
+//	closed_set_num_ = 0ll;
+//
+//	//if (h_ == 0) // pushing to all rank
+//	{
+//		// push root state to stack
+//		int * root_itemset;
+//		node_stack_->Clear();
+//		node_stack_->PushPre();
+//		root_itemset = node_stack_->Top();
+//		node_stack_->SetSup(root_itemset, lambda_max_);
+//		node_stack_->PushPostNoSort();
+//	}
+//
+//	double int_sig_lev = 0.0;
+//	if (mpi_data_.mpiRank_ == 0)
+//		int_sig_lev = GetInterimSigLevel(lambda_);
+//	// bcast int_sig_lev
+//	CallBcast(&int_sig_lev, 1, MPI_DOUBLE);
+//
+//	// todo: reduce expand_num_
+//
+//	{
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "2nd phase start\n";
+//			std::cout << "# " << "lambda=" << lambda_ << "\tint_sig_lev="
+//					<< int_sig_lev << "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+//					<< std::endl;
+//		}
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(D(1) << "2nd phase start" << std::endl
+//		;);
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(
+//				D(2) << "lambda=" << lambda_ << "\tint_sig_lev=" << int_sig_lev
+//						<< "\telapsed_time="
+//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
+//								/ GIGA << std::endl
+//				;);
+//
+//		sig_level_ = int_sig_lev;
+//		MainLoopStraw1();
+//	}
+//
+//	DBG(D(1) << "closed_set_num=" << closed_set_num_ << std::endl
+//	;);
+//
+//	long long int closed_set_num_reduced;
+//	MPI_Reduce(&closed_set_num_, &closed_set_num_reduced, 1, MPI_LONG_LONG_INT,
+//	MPI_SUM, 0, MPI_COMM_WORLD);
+//
+//	DBG(if (mpi_data_.mpiRank_ == 0)
+//		D(1) << "closed_set_num_reduced=" << closed_set_num_reduced << std::endl
+//		;);
+//	if (mpi_data_.mpiRank_ == 0)
+//		final_closed_set_num_ = closed_set_num_reduced;
+//
+//	log_.d_.dtd_phase_per_sec_ = (double) (log_.d_.dtd_phase_num_)
+//			/ ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
+//
+//	MPI_Barrier( MPI_COMM_WORLD);
+//	log_.FinishPeriodicLog();
+//
+//	// todo: gather logs
+//
+//	{
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "2nd phase end\n";
+//			std::cout << "# " << "closed_set_num=" << std::setw(12)
+//					<< final_closed_set_num_ << "\tsig_lev="
+//					<< (FLAGS_a / final_closed_set_num_) << "\tnum_expand="
+//					<< std::setw(12) << expand_num_ << "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+//					<< std::endl;
+//		}
+//	}
+//
+//	if (!FLAGS_third_phase) {
+//		log_.d_.search_finish_time_ = timer_->Elapsed();
+//		log_.GatherLog(mpi_data_.nTotalProc_);
+//		DBG(D(1) << "log" << std::endl
+//		;);
+//		DBG(PrintLog(D(1, false))
+//		;);
+//		DBG(PrintPLog(D(1, false))
+//		;);
+//		return;
+//	}
+//
+//	// prepare 3rd phase
+//	phase_ = 3;
+//	//ClearTasks();
+//	CheckPoint(); // needed for reseting dtd_.terminated_
+//
+//	if (node_stack_)
+//		delete node_stack_;
+//	node_stack_ = NULL;
+//	significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max);
+//	// significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
+//
+//	final_sig_level_ = FLAGS_a / final_closed_set_num_;
+//	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
+//
+//	{
+//		MainLoopStraw1();
+//	}
+//
+//	// implement this in main loop
+//	// copy only significant itemset to buffer
+//	// collect itemset
+//	//   can reuse the other stack (needs to compute pval again)
+//	//   or prepare simpler data structure
+//	if (mpi_data_.mpiRank_ == 0)
+//		SortSignificantSets();
+//	log_.d_.search_finish_time_ = timer_->Elapsed();
+//	MPI_Barrier( MPI_COMM_WORLD);
+//
+//	{
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "3rd phase end\n";
+//			std::cout << "# " << "sig_lev=" << final_sig_level_
+//					<< "\telapsed_time="
+//					<< (log_.d_.search_finish_time_ - log_.d_.search_start_time_)
+//							/ GIGA << std::endl;
+//		}
+//	}
+//
+//	log_.GatherLog(mpi_data_.nTotalProc_);
+//	DBG(D(1) << "log" << std::endl
+//	;);
+//	DBG(PrintLog(D(1, false))
+//	;);
+//	DBG(PrintPLog(D(1, false))
+//	;);
+//
+//	//ClearTasks();
+//}
 
 bool MP_LAMP::CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 		long long int start_time) {
@@ -1833,8 +1780,8 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 		{
 			int n = treesearch_data->node_stack_->GetItemNum(itemset_buf_);
 			for (int i = 0; i < n; i++) {
-				int item = treesearch_data->node_stack_->GetNthItem(itemset_buf_,
-						i);
+				int item = treesearch_data->node_stack_->GetNthItem(
+						itemset_buf_, i);
 				bsh_->And(d_->NthData(item), sup_buf_);
 			}
 		}
@@ -1846,8 +1793,8 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 
 		assert(
 				phase_ != 1
-						|| treesearch_data->node_stack_->GetItemNum(itemset_buf_)
-								!= 0);
+						|| treesearch_data->node_stack_->GetItemNum(
+								itemset_buf_) != 0);
 
 		bool is_root_node = (treesearch_data->node_stack_->GetItemNum(
 				itemset_buf_) == 0);
@@ -1876,9 +1823,9 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 						if (elt - lap_time >= FLAGS_probe_period * 1000000) {
 							log_.d_.process_node_time_ += elt - lap_time;
 
-							Probe();
-							Distribute();
-							Reject();
+							Probe(mpi_data);
+							Distribute(mpi_data);
+							Reject(mpi_data);
 
 							lap_time = timer_->Elapsed();
 						}
@@ -1889,9 +1836,9 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 						log_.d_.process_node_time_ += timer_->Elapsed()
 								- lap_time;
 
-						Probe();
-						Distribute();
-						Reject();
+						Probe(mpi_data);
+						Distribute(mpi_data);
+						Reject(mpi_data);
 
 						lap_time = timer_->Elapsed();
 					}
@@ -1982,177 +1929,177 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 	return true;
 }
 
-bool MP_LAMP::ProcessNodeStraw1(int n) {
-	if (node_stack_->Empty())
-		return false;
-	long long int start_time, lap_time;
-	start_time = timer_->Elapsed();
-	lap_time = start_time;
-
-	int processed = 0;
-	mpi_data_.processing_node_ = true;
-	while (!node_stack_->Empty()) {
-		processed++;
-		expand_num_++;
-
-		node_stack_->CopyItem(node_stack_->Top(), itemset_buf_);
-		node_stack_->Pop();
-
-		// dbg
-		DBG(D(3) << "expanded "
-		;);
-		DBG(node_stack_->Print(D(3), itemset_buf_)
-		;);
-
-		// calculate support from itemset_buf_
-		bsh_->Set(sup_buf_);
-		{
-			int n = node_stack_->GetItemNum(itemset_buf_);
-			for (int i = 0; i < n; i++) {
-				int item = node_stack_->GetNthItem(itemset_buf_, i);
-				bsh_->And(d_->NthData(item), sup_buf_);
-			}
-		}
-
-		int core_i = g_->CoreIndex(*node_stack_, itemset_buf_);
-
-		int * ppc_ext_buf;
-		// todo: use database reduction
-
-		assert(phase_ != 1 || node_stack_->GetItemNum(itemset_buf_) != 0);
-
-		bool is_root_node = (node_stack_->GetItemNum(itemset_buf_) == 0);
-
-		int accum_period_counter_ = 0;
-		// reverse order
-		// for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
-		for (int new_item = d_->NextItemInReverseLoop(is_root_node,
-				mpi_data_.mpiRank_, mpi_data_.nTotalProc_, d_->NuItems());
-				new_item >= core_i + 1;
-				new_item = d_->NextItemInReverseLoop(is_root_node,
-						mpi_data_.mpiRank_, mpi_data_.nTotalProc_, new_item)) {
-			// skip existing item
-			// todo: improve speed here
-			if (node_stack_->Exist(itemset_buf_, new_item))
-				continue;
-
-			{      // Periodic probe. (do in both phases)
-				accum_period_counter_++;
-				if (FLAGS_probe_period_is_ms) {      // using milli second
-					if (accum_period_counter_ >= 64) {
-						// to avoid calling timer_ frequently, time is checked once in 64 loops
-						// clock_gettime takes 0.3--0.5 micro sec
-						accum_period_counter_ = 0;
-						long long int elt = timer_->Elapsed();
-						if (elt - lap_time >= FLAGS_probe_period * 1000000) {
-							log_.d_.process_node_time_ += elt - lap_time;
-
-							Probe();
-
-							lap_time = timer_->Elapsed();
-						}
-					}
-				} else {            // not using milli second
-					if (accum_period_counter_ >= FLAGS_probe_period) {
-						accum_period_counter_ = 0;
-						log_.d_.process_node_time_ += timer_->Elapsed()
-								- lap_time;
-
-						Probe();
-
-						lap_time = timer_->Elapsed();
-					}
-				}
-				// note: do this before PushPre is called [2015-10-05 21:56]
-
-				// todo: if database reduction is implemented,
-				//       do something here for changed lambda_ (skipping new_item value ?)
-			}
-
-			bsh_->Copy(sup_buf_, child_sup_buf_);
-			int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
-					child_sup_buf_);
-
-			if (sup_num < lambda_)
-				continue;
-
-			node_stack_->PushPre();
-			ppc_ext_buf = node_stack_->Top();
-
-			bool res = g_->PPCExtension(node_stack_, itemset_buf_,
-					child_sup_buf_, core_i, new_item, ppc_ext_buf);
-
-			node_stack_->SetSup(ppc_ext_buf, sup_num);
-			node_stack_->PushPostNoSort();
-
-			if (!res) {        // todo: remove this redundancy
-				node_stack_->Pop();
-			} else {
-				node_stack_->SortTop();
-
-				DBG(if (phase_ == 2) {
-					D(3) << "found cs "
-					;
-					node_stack_->Print(D(3), ppc_ext_buf)
-					;
-				});
-
-				if (phase_ == 1)
-					IncCsAccum(sup_num); // increment closed_set_num_array
-				if (phase_ == 2)
-					closed_set_num_++;
-
-				if (phase_ == 2 && FLAGS_third_phase) {
-					int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
-							child_sup_buf_);
-					double pval = d_->PVal(sup_num, pos_sup_num);
-					assert(pval >= 0.0);
-					if (pval <= sig_level_) { // permits == case?
-						freq_stack_->PushPre();
-						int * item = freq_stack_->Top();
-						freq_stack_->CopyItem(ppc_ext_buf, item);
-						freq_stack_->PushPostNoSort();
-
-						freq_map_.insert(std::pair<double, int*>(pval, item));
-					}
-				}
-
-				assert(sup_num >= lambda_);
-
-				// try skipping if supnum_ == sup_threshold,
-				// because if sup_num of a node equals to sup_threshold, children will have smaller sup_num
-				// therefore no need to check it's children
-				// note: skipping node_stack_ full check. allocate enough memory!
-				if (sup_num <= lambda_)
-					node_stack_->Pop();
-			}
-		}
-
-		if (CheckProcessNodeEnd(n, mpi_data_.isGranularitySec_, processed,
-				start_time))
-			break;
-	}
-
-	long long int elapsed_time = timer_->Elapsed() - lap_time;
-	log_.d_.process_node_time_ += elapsed_time;
-	log_.d_.process_node_num_ += processed;
-
-	DBG(
-			D(2) << "processed node num=" << processed << "\ttime="
-					<< elapsed_time << std::endl
-			;);
-
-	mpi_data_.processing_node_ = false;
-	return true;
-}
+//bool MP_LAMP::ProcessNodeStraw1(int n) {
+//	if (node_stack_->Empty())
+//		return false;
+//	long long int start_time, lap_time;
+//	start_time = timer_->Elapsed();
+//	lap_time = start_time;
+//
+//	int processed = 0;
+//	mpi_data_.processing_node_ = true;
+//	while (!node_stack_->Empty()) {
+//		processed++;
+//		expand_num_++;
+//
+//		node_stack_->CopyItem(node_stack_->Top(), itemset_buf_);
+//		node_stack_->Pop();
+//
+//		// dbg
+//		DBG(D(3) << "expanded "
+//		;);
+//		DBG(node_stack_->Print(D(3), itemset_buf_)
+//		;);
+//
+//		// calculate support from itemset_buf_
+//		bsh_->Set(sup_buf_);
+//		{
+//			int n = node_stack_->GetItemNum(itemset_buf_);
+//			for (int i = 0; i < n; i++) {
+//				int item = node_stack_->GetNthItem(itemset_buf_, i);
+//				bsh_->And(d_->NthData(item), sup_buf_);
+//			}
+//		}
+//
+//		int core_i = g_->CoreIndex(*node_stack_, itemset_buf_);
+//
+//		int * ppc_ext_buf;
+//		// todo: use database reduction
+//
+//		assert(phase_ != 1 || node_stack_->GetItemNum(itemset_buf_) != 0);
+//
+//		bool is_root_node = (node_stack_->GetItemNum(itemset_buf_) == 0);
+//
+//		int accum_period_counter_ = 0;
+//		// reverse order
+//		// for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
+//		for (int new_item = d_->NextItemInReverseLoop(is_root_node,
+//				mpi_data_.mpiRank_, mpi_data_.nTotalProc_, d_->NuItems());
+//				new_item >= core_i + 1;
+//				new_item = d_->NextItemInReverseLoop(is_root_node,
+//						mpi_data_.mpiRank_, mpi_data_.nTotalProc_, new_item)) {
+//			// skip existing item
+//			// todo: improve speed here
+//			if (node_stack_->Exist(itemset_buf_, new_item))
+//				continue;
+//
+//			{      // Periodic probe. (do in both phases)
+//				accum_period_counter_++;
+//				if (FLAGS_probe_period_is_ms) {      // using milli second
+//					if (accum_period_counter_ >= 64) {
+//						// to avoid calling timer_ frequently, time is checked once in 64 loops
+//						// clock_gettime takes 0.3--0.5 micro sec
+//						accum_period_counter_ = 0;
+//						long long int elt = timer_->Elapsed();
+//						if (elt - lap_time >= FLAGS_probe_period * 1000000) {
+//							log_.d_.process_node_time_ += elt - lap_time;
+//
+//							Probe();
+//
+//							lap_time = timer_->Elapsed();
+//						}
+//					}
+//				} else {            // not using milli second
+//					if (accum_period_counter_ >= FLAGS_probe_period) {
+//						accum_period_counter_ = 0;
+//						log_.d_.process_node_time_ += timer_->Elapsed()
+//								- lap_time;
+//
+//						Probe();
+//
+//						lap_time = timer_->Elapsed();
+//					}
+//				}
+//				// note: do this before PushPre is called [2015-10-05 21:56]
+//
+//				// todo: if database reduction is implemented,
+//				//       do something here for changed lambda_ (skipping new_item value ?)
+//			}
+//
+//			bsh_->Copy(sup_buf_, child_sup_buf_);
+//			int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
+//					child_sup_buf_);
+//
+//			if (sup_num < lambda_)
+//				continue;
+//
+//			node_stack_->PushPre();
+//			ppc_ext_buf = node_stack_->Top();
+//
+//			bool res = g_->PPCExtension(node_stack_, itemset_buf_,
+//					child_sup_buf_, core_i, new_item, ppc_ext_buf);
+//
+//			node_stack_->SetSup(ppc_ext_buf, sup_num);
+//			node_stack_->PushPostNoSort();
+//
+//			if (!res) {        // todo: remove this redundancy
+//				node_stack_->Pop();
+//			} else {
+//				node_stack_->SortTop();
+//
+//				DBG(if (phase_ == 2) {
+//					D(3) << "found cs "
+//					;
+//					node_stack_->Print(D(3), ppc_ext_buf)
+//					;
+//				});
+//
+//				if (phase_ == 1)
+//					IncCsAccum(sup_num); // increment closed_set_num_array
+//				if (phase_ == 2)
+//					closed_set_num_++;
+//
+//				if (phase_ == 2 && FLAGS_third_phase) {
+//					int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
+//							child_sup_buf_);
+//					double pval = d_->PVal(sup_num, pos_sup_num);
+//					assert(pval >= 0.0);
+//					if (pval <= sig_level_) { // permits == case?
+//						freq_stack_->PushPre();
+//						int * item = freq_stack_->Top();
+//						freq_stack_->CopyItem(ppc_ext_buf, item);
+//						freq_stack_->PushPostNoSort();
+//
+//						freq_map_.insert(std::pair<double, int*>(pval, item));
+//					}
+//				}
+//
+//				assert(sup_num >= lambda_);
+//
+//				// try skipping if supnum_ == sup_threshold,
+//				// because if sup_num of a node equals to sup_threshold, children will have smaller sup_num
+//				// therefore no need to check it's children
+//				// note: skipping node_stack_ full check. allocate enough memory!
+//				if (sup_num <= lambda_)
+//					node_stack_->Pop();
+//			}
+//		}
+//
+//		if (CheckProcessNodeEnd(n, mpi_data_.isGranularitySec_, processed,
+//				start_time))
+//			break;
+//	}
+//
+//	long long int elapsed_time = timer_->Elapsed() - lap_time;
+//	log_.d_.process_node_time_ += elapsed_time;
+//	log_.d_.process_node_num_ += processed;
+//
+//	DBG(
+//			D(2) << "processed node num=" << processed << "\ttime="
+//					<< elapsed_time << std::endl
+//			;);
+//
+//	mpi_data_.processing_node_ = false;
+//	return true;
+//}
 
 // lifeline == -1 for random thieves
-void MP_LAMP::SendRequest(int dst, int is_lifeline) {
+void MP_LAMP::SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline) {
 	assert(dst >= 0);
 	int message[2];
 	message[0] = dtd_.time_zone_;
 	message[1] = is_lifeline; // -1 for random thieves, >=0 for lifeline thieves
-	assert(dst < mpi_data_.nTotalProc_ && "SendRequest");
+	assert(dst < mpi_data.nTotalProc_ && "SendRequest");
 
 	CallBsend(message, 2, MPI_INT, dst, Tag::REQUEST);
 	dtd_.OnSend();
@@ -2163,7 +2110,7 @@ void MP_LAMP::SendRequest(int dst, int is_lifeline) {
 			;);
 }
 
-void MP_LAMP::RecvRequest(int src) {
+void MP_LAMP::RecvRequest(MPI_Data& mpi_data, int src) {
 	DBG(D(2) << "RecvRequest: src=" << src
 	;);
 	MPI_Status recv_status;
@@ -2188,28 +2135,28 @@ void MP_LAMP::RecvRequest(int src) {
 		DBG(D(2, false) << "\tempty and reject" << std::endl
 		;);
 		if (is_lifeline >= 0) {
-			mpi_data_.lifeline_thieves_->Push(thief);
-			SendReject(thief); // notify
+			mpi_data.lifeline_thieves_->Push(thief);
+			SendReject(mpi_data, thief); // notify
 		} else {
-			SendReject(thief); // notify
+			SendReject(mpi_data, thief); // notify
 		}
 	} else {
 		DBG(D(2, false) << "\tpush" << std::endl
 		;);
 		if (is_lifeline >= 0)
-			mpi_data_.thieves_->Push(thief);
+			mpi_data.thieves_->Push(thief);
 		else
-			mpi_data_.thieves_->Push(-thief - 1);
+			mpi_data.thieves_->Push(-thief - 1);
 	}
 	// todo: take log
 }
 
-void MP_LAMP::SendReject(int dst) {
+void MP_LAMP::SendReject(MPI_Data& mpi_data, int dst) {
 	assert(dst >= 0);
 	int message[1];
 
 	message[0] = dtd_.time_zone_;
-	assert(dst < mpi_data_.nTotalProc_ && "SendReject");
+	assert(dst < mpi_data.nTotalProc_ && "SendReject");
 	CallBsend(message, 1, MPI_INT, dst, Tag::REJECT);
 	dtd_.OnSend();
 
@@ -2219,7 +2166,7 @@ void MP_LAMP::SendReject(int dst) {
 			;);
 }
 
-void MP_LAMP::RecvReject(int src) {
+void MP_LAMP::RecvReject(MPI_Data& mpi_data, int src) {
 	MPI_Status recv_status;
 	int message[1];
 
@@ -2238,8 +2185,8 @@ void MP_LAMP::RecvReject(int src) {
 	waiting_ = false;
 }
 
-void MP_LAMP::SendGive(VariableLengthItemsetStack * st, int dst,
-		int is_lifeline) {
+void MP_LAMP::SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
+		int dst, int is_lifeline) {
 	assert(dst >= 0);
 	st->SetTimestamp(dtd_.time_zone_);
 	st->SetFlag(is_lifeline);
@@ -2251,7 +2198,7 @@ void MP_LAMP::SendGive(VariableLengthItemsetStack * st, int dst,
 	log_.d_.give_stack_max_cap_ = std::max(log_.d_.give_stack_max_cap_,
 			(long long int) (st->UsedCapacity()));
 
-	assert(dst < mpi_data_.nTotalProc_ && "SendGive");
+	assert(dst < mpi_data.nTotalProc_ && "SendGive");
 	CallBsend(message, size, MPI_INT, dst, Tag::GIVE);
 	dtd_.OnSend();
 
@@ -2264,7 +2211,7 @@ void MP_LAMP::SendGive(VariableLengthItemsetStack * st, int dst,
 	//st->PrintAll(D(false));
 }
 
-void MP_LAMP::RecvGive(int src, MPI_Status probe_status) {
+void MP_LAMP::RecvGive(MPI_Data& mpi_data, int src, MPI_Status probe_status) {
 	int count;
 	int error = MPI_Get_count(&probe_status, MPI_INT, &count);
 	if (error != MPI_SUCCESS) {
@@ -2292,7 +2239,7 @@ void MP_LAMP::RecvGive(int src, MPI_Status probe_status) {
 	int new_nu_itemset = node_stack_->NuItemset();
 
 	if (flag >= 0) {
-		mpi_data_.lifelines_activated_[src] = false;
+		mpi_data.lifelines_activated_[src] = false;
 		log_.d_.lifeline_steal_num_++;
 		log_.d_.lifeline_nodes_received_ += (new_nu_itemset - orig_nu_itemset);
 	} else {
@@ -2324,31 +2271,30 @@ void MP_LAMP::RecvGive(int src, MPI_Status probe_status) {
 	waiting_ = false;
 }
 
-void MP_LAMP::SendLambda(int lambda) {
+void MP_LAMP::SendLambda(MPI_Data& mpi_data, int lambda) {
 	// send lambda to bcast_targets_
 	int message[2];
 	message[0] = dtd_.time_zone_;
 	message[1] = lambda;
 
 	for (int i = 0; i < k_echo_tree_branch; i++) {
-		if (mpi_data_.bcast_targets_[i] < 0)
+		if (mpi_data.bcast_targets_[i] < 0)
 			break;
 		assert(
-				mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_
+				mpi_data.bcast_targets_[i] < mpi_data.nTotalProc_
 						&& "SendLambda");
-		CallBsend(message, 2, MPI_INT, mpi_data_.bcast_targets_[i],
-				Tag::LAMBDA);
+		CallBsend(message, 2, MPI_INT, mpi_data.bcast_targets_[i], Tag::LAMBDA);
 		dtd_.OnSend();
 
 		DBG(
-				D(2) << "SendLambda: dst=" << mpi_data_.bcast_targets_[i]
+				D(2) << "SendLambda: dst=" << mpi_data.bcast_targets_[i]
 						<< "\tlambda=" << lambda << "\tdtd_count="
 						<< dtd_.count_ << std::endl
 				;);
 	}
 }
 
-void MP_LAMP::RecvLambda(int src) {
+void MP_LAMP::RecvLambda(MPI_Data& mpi_data, int src) {
 	MPI_Status recv_status;
 	int message[2];
 
@@ -2365,29 +2311,38 @@ void MP_LAMP::RecvLambda(int src) {
 
 	int new_lambda = message[1];
 	if (new_lambda > lambda_) {
-		SendLambda(new_lambda);
+		SendLambda(mpi_data, new_lambda);
 		lambda_ = new_lambda;
 		// todo: do database reduction
 	}
 }
 
-bool MP_LAMP::AccumCountReady() const {
+bool MP_LAMP::AccumCountReady(MPI_Data& mpi_data) const {
 	for (int i = 0; i < k_echo_tree_branch; i++)
-		if (mpi_data_.bcast_targets_[i] >= 0 && !(mpi_data_.accum_flag_[i]))
+		if (mpi_data.bcast_targets_[i] >= 0 && !(mpi_data.accum_flag_[i]))
 			return false;
 	return true;
 	// check only valid bcast_targets_
 	// always true if leaf
 }
 
-void MP_LAMP::CheckCSThreshold() {
-	assert(mpi_data_.mpiRank_ == 0);
+void MP_LAMP::CheckCSThreshold(MPI_Data& mpi_data) {
+//	assert(mpi_data.mpiRank_ == 0);
 	if (ExceedCsThr()) {
 		int new_lambda = NextLambdaThr();
-		SendLambda(new_lambda);
+		SendLambda(mpi_data, new_lambda);
 		lambda_ = new_lambda;
 	}
 }
+
+//void MP_LAMP::CheckCSThreshold(GetMinSupData* getminsup_data) {
+////	assert(mpi_data.mpiRank_ == 0);
+//	if (ExceedCsThr()) {
+//		int new_lambda = NextLambdaThr();
+//		SendLambda(new_lambda);
+//		getminsup_data->lambda_ = new_lambda;
+//	}
+//}
 
 bool MP_LAMP::ExceedCsThr() const {
 	// note: > is correct. permit ==
@@ -2402,6 +2357,15 @@ int MP_LAMP::NextLambdaThr() const {
 	return si + 1;
 	// it is safe because lambda_ higher than max results in immediate search finish
 }
+
+//int MP_LAMP::NextLambdaThr(GetMinSupData* getminsup_data) const {
+//	int si;
+//	for (si = getminsup_data->lambda_max_; si >= getminsup_data->lambda_; si--)
+//		if (getminsup_data->accum_array_[si] > getminsup_data->cs_thr_[si])
+//			break;
+//	return si + 1;
+//	// it is safe because lambda_ higher than max results in immediate search finish
+//}
 
 void MP_LAMP::IncCsAccum(int sup_num) {
 	for (int i = sup_num; i >= lambda_ - 1; i--)
@@ -2421,29 +2385,29 @@ double MP_LAMP::GetInterimSigLevel(int lambda) const {
 
 //==============================================================================
 
-void MP_LAMP::SendResultRequest() {
+void MP_LAMP::SendResultRequest(MPI_Data& mpi_data) {
 	int message[1];
 	message[0] = 1; // dummy
 
-	mpi_data_.echo_waiting_ = true;
+	mpi_data.echo_waiting_ = true;
 
 	for (int i = 0; i < k_echo_tree_branch; i++) {
-		if (mpi_data_.bcast_targets_[i] < 0)
+		if (mpi_data.bcast_targets_[i] < 0)
 			break;
 
 		assert(
-				mpi_data_.bcast_targets_[i] < mpi_data_.nTotalProc_
+				mpi_data.bcast_targets_[i] < mpi_data.nTotalProc_
 						&& "SendResultRequest");
-		CallBsend(message, 1, MPI_INT, mpi_data_.bcast_targets_[i],
+		CallBsend(message, 1, MPI_INT, mpi_data.bcast_targets_[i],
 				Tag::RESULT_REQUEST);
 		DBG(
-				D(2) << "SendResultRequest: dst=" << mpi_data_.bcast_targets_[i]
+				D(2) << "SendResultRequest: dst=" << mpi_data.bcast_targets_[i]
 						<< std::endl
 				;);
 	}
 }
 
-void MP_LAMP::RecvResultRequest(int src) {
+void MP_LAMP::RecvResultRequest(MPI_Data& mpi_data, int src) {
 	MPI_Status recv_status;
 	int message[1];
 	CallRecv(&message, 1, MPI_INT, src, Tag::RESULT_REQUEST, &recv_status);
@@ -2452,31 +2416,30 @@ void MP_LAMP::RecvResultRequest(int src) {
 	DBG(D(2) << "RecvResultRequest: src=" << src << std::endl
 	;);
 
-	if (IsLeaf())
-		SendResultReply();
+	if (IsLeaf(mpi_data))
+		SendResultReply(mpi_data);
 	else
-		SendResultRequest();
+		SendResultRequest(mpi_data);
 }
 
-void MP_LAMP::SendResultReply() {
+void MP_LAMP::SendResultReply(MPI_Data& mpi_data) {
 	int * message = significant_stack_->Stack();
 	int size = significant_stack_->UsedCapacity();
-	assert(
-			mpi_data_.bcast_source_ < mpi_data_.nTotalProc_
-					&& "SendResultReply");
-	CallBsend(message, size, MPI_INT, mpi_data_.bcast_source_,
+	assert(mpi_data.bcast_source_ < mpi_data.nTotalProc_ && "SendResultReply");
+	CallBsend(message, size, MPI_INT, mpi_data.bcast_source_,
 			Tag::RESULT_REPLY);
 
-	DBG(D(2) << "SendResultReply: dst=" << mpi_data_.bcast_source_ << std::endl
+	DBG(D(2) << "SendResultReply: dst=" << mpi_data.bcast_source_ << std::endl
 	;);
 	DBG(significant_stack_->PrintAll(D(3, false))
 	;);
 
-	mpi_data_.echo_waiting_ = false;
+	mpi_data.echo_waiting_ = false;
 	dtd_.terminated_ = true;
 }
 
-void MP_LAMP::RecvResultReply(int src, MPI_Status probe_status) {
+void MP_LAMP::RecvResultReply(MPI_Data& mpi_data, int src,
+		MPI_Status probe_status) {
 	int count;
 	int error = MPI_Get_count(&probe_status, MPI_INT, &count);
 	if (error != MPI_SUCCESS) {
@@ -2505,19 +2468,19 @@ void MP_LAMP::RecvResultReply(int src, MPI_Status probe_status) {
 	// using the same flags as accum count, should be fixed
 	bool flag = false;
 	for (int i = 0; i < k_echo_tree_branch; i++) {
-		if (mpi_data_.bcast_targets_[i] == src) {
+		if (mpi_data.bcast_targets_[i] == src) {
 			flag = true;
-			mpi_data_.accum_flag_[i] = true;
+			mpi_data.accum_flag_[i] = true;
 			break;
 		}
 	}
 	assert(flag);
 
-	if (AccumCountReady()) {
-		if (mpi_data_.mpiRank_ != 0) {
-			SendResultReply();
+	if (AccumCountReady(mpi_data)) {
+		if (mpi_data.mpiRank_ != 0) {
+			SendResultReply(mpi_data);
 		} else { // root
-			mpi_data_.echo_waiting_ = false;
+			mpi_data.echo_waiting_ = false;
 			dtd_.terminated_ = true;
 		}
 	}
@@ -2564,30 +2527,31 @@ void MP_LAMP::SortSignificantSets() {
 
 //==============================================================================
 
-void MP_LAMP::Distribute() {
-	if (mpi_data_.nTotalProc_ == 1)
+void MP_LAMP::Distribute(MPI_Data& mpi_data) {
+	if (mpi_data.nTotalProc_ == 1)
 		return;
 	DBG(D(3) << "Distribute" << std::endl
 	;);
-	if (mpi_data_.thieves_->Size() > 0
-			|| mpi_data_.lifeline_thieves_->Size() > 0) {
+	if (mpi_data.thieves_->Size() > 0
+			|| mpi_data.lifeline_thieves_->Size() > 0) {
 		int steal_num = node_stack_->Split(give_stack_);
 		if (steal_num > 0) {
 			DBG(D(3) << "giving" << std::endl
 			;);
 			DBG(give_stack_->PrintAll(D(3, false))
 			;);
-			Give(give_stack_, steal_num);
+			Give(mpi_data, give_stack_, steal_num);
 			give_stack_->Clear();
 		}
 	}
 }
 
-void MP_LAMP::Give(VariableLengthItemsetStack * st, int steal_num) {
+void MP_LAMP::Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
+		int steal_num) {
 	DBG(D(3) << "Give: "
 	;);
-	if (mpi_data_.thieves_->Size() > 0) { // random thieves
-		int thief = mpi_data_.thieves_->Pop();
+	if (mpi_data.thieves_->Size() > 0) { // random thieves
+		int thief = mpi_data.thieves_->Pop();
 		if (thief >= 0) { // lifeline thief
 			DBG(
 					D(3, false) << "thief=" << thief << "\trandom lifeline"
@@ -2595,7 +2559,7 @@ void MP_LAMP::Give(VariableLengthItemsetStack * st, int steal_num) {
 					;);
 			log_.d_.lifeline_given_num_++;
 			log_.d_.lifeline_nodes_given_ += steal_num;
-			SendGive(st, thief, mpi_data_.mpiRank_);
+			SendGive(mpi_data, st, thief, mpi_data.mpiRank_);
 		} else { // random thief
 			DBG(
 					D(3, false) << "thief=" << (-thief - 1) << "\trandom"
@@ -2603,41 +2567,41 @@ void MP_LAMP::Give(VariableLengthItemsetStack * st, int steal_num) {
 					;);
 			log_.d_.given_num_++;
 			log_.d_.nodes_given_ += steal_num;
-			SendGive(st, (-thief - 1), -1);
+			SendGive(mpi_data, st, (-thief - 1), -1);
 		}
 	} else {
-		assert(mpi_data_.lifeline_thieves_->Size() > 0);
-		int thief = mpi_data_.lifeline_thieves_->Pop();
+		assert(mpi_data.lifeline_thieves_->Size() > 0);
+		int thief = mpi_data.lifeline_thieves_->Pop();
 		assert(thief >= 0);
 		DBG(D(3, false) << "thief=" << thief << "\tlifeline" << std::endl
 		;);
 		log_.d_.lifeline_given_num_++;
 		log_.d_.lifeline_nodes_given_ += steal_num;
-		SendGive(st, thief, mpi_data_.mpiRank_);
+		SendGive(mpi_data, st, thief, mpi_data.mpiRank_);
 	}
 }
 
-void MP_LAMP::Reject() {
-	if (mpi_data_.nTotalProc_ == 1)
+void MP_LAMP::Reject(MPI_Data& mpi_data) {
+	if (mpi_data.nTotalProc_ == 1)
 		return;
 	DBG(D(3) << "Reject" << std::endl
 	;);
 	// discard random thieves, move lifeline thieves to lifeline thieves stack
-	while (mpi_data_.thieves_->Size() > 0) {
-		int thief = mpi_data_.thieves_->Pop();
+	while (mpi_data.thieves_->Size() > 0) {
+		int thief = mpi_data.thieves_->Pop();
 		if (thief >= 0) { // lifeline thief
-			mpi_data_.lifeline_thieves_->Push(thief);
-			SendReject(thief);
+			mpi_data.lifeline_thieves_->Push(thief);
+			SendReject(mpi_data, thief);
 		} else { // random thief
-			SendReject(-thief - 1);
+			SendReject(mpi_data, -thief - 1);
 		}
 	}
 }
 
-void MP_LAMP::Steal() {
+void MP_LAMP::Steal(MPI_Data& mpi_data) {
 	DBG(D(3) << "Steal" << std::endl
 	;);
-	if (mpi_data_.nTotalProc_ == 1)
+	if (mpi_data.nTotalProc_ == 1)
 		return;
 	if (!stealer_.StealStarted())
 		return;
@@ -2650,9 +2614,9 @@ void MP_LAMP::Steal() {
 
 	switch (stealer_.State()) {
 	case StealState::RANDOM: {
-		int victim = mpi_data_.victims_[mpi_data_.rand_m_()];
-		assert(victim <= mpi_data_.nTotalProc_ && "stealrandom");
-		SendRequest(victim, -1);
+		int victim = mpi_data.victims_[mpi_data.rand_m_()];
+		assert(victim <= mpi_data.nTotalProc_ && "stealrandom");
+		SendRequest(mpi_data, victim, -1);
 		stealer_.SetRequesting();
 		DBG(
 				D(2) << "Steal Random:" << "\trequesting="
@@ -2665,27 +2629,27 @@ void MP_LAMP::Steal() {
 	}
 		break;
 	case StealState::LIFELINE: {
-		int lifeline = mpi_data_.lifelines_[stealer_.LifelineVictim()];
+		int lifeline = mpi_data.lifelines_[stealer_.LifelineVictim()];
 		assert(lifeline >= 0); // at least lifelines_[0] must be 0 or higher
-		if (!mpi_data_.lifelines_activated_[lifeline]) {
-			mpi_data_.lifelines_activated_[lifeline] = true;
+		if (!mpi_data.lifelines_activated_[lifeline]) {
+			mpi_data.lifelines_activated_[lifeline] = true;
 			// becomes false only at RecvGive
-			assert(lifeline <= mpi_data_.nTotalProc_ && "lifeline");
-			SendRequest(lifeline, 1);
+			assert(lifeline <= mpi_data.nTotalProc_ && "lifeline");
+			SendRequest(mpi_data, lifeline, 1);
 			DBG(
 					D(2) << "Steal Lifeline:" << "\trequesting="
 							<< stealer_.Requesting() << "\tlifeline counter="
 							<< stealer_.LifelineCounter()
 							<< "\tlifeline victim=" << stealer_.LifelineVictim()
-							<< "\tz_=" << mpi_data_.hypercubeDimension_
+							<< "\tz_=" << mpi_data.hypercubeDimension_
 							<< std::endl
 					;);
 		}
 
 		stealer_.IncLifelineCount();
 		stealer_.IncLifelineVictim();
-		if (stealer_.LifelineCounter() >= mpi_data_.hypercubeDimension_
-				|| mpi_data_.lifelines_[stealer_.LifelineVictim()] < 0) { // hack fix
+		if (stealer_.LifelineCounter() >= mpi_data.hypercubeDimension_
+				|| mpi_data.lifelines_[stealer_.LifelineVictim()] < 0) { // hack fix
 // note: this resets next_lifeline_victim_, is this OK?
 			stealer_.Finish();
 			DBG(D(2) << "Steal finish:" << std::endl
@@ -2704,49 +2668,49 @@ void MP_LAMP::Steal() {
 	}
 }
 
-void MP_LAMP::Steal2() {
-	DBG(D(3) << "Steal" << std::endl
-	;);
-	if (mpi_data_.nTotalProc_ == 1)
-		return;
-
-	// random steal
-	for (int i = 0; i < mpi_data_.nRandStealTrials_ && node_stack_->Empty();
-			i++) {
-		// todo: log steal trial
-		int victim = mpi_data_.victims_[mpi_data_.rand_m_()];
-		SendRequest(victim, -1);
-		waiting_ = true;
-		DBG(D(2) << "Steal Random:" << "\trandom counter=" << i << std::endl
-		;);
-		// todo: measure idle time
-		while (waiting_)
-			Probe();
-	}
-	if (dtd_.terminated_)
-		return;
-
-	// lifeline steal
-	for (int i = 0; i < mpi_data_.hypercubeDimension_ && node_stack_->Empty();
-			i++) {
-		int lifeline = mpi_data_.lifelines_[i];
-		if (lifeline < 0)
-			break; // break if -1
-		if (!mpi_data_.lifelines_activated_[lifeline]) {
-			mpi_data_.lifelines_activated_[lifeline] = true;
-			// becomes false only at RecvGive
-			SendRequest(lifeline, 1);
-			waiting_ = true;
-			DBG(
-					D(2) << "Steal Lifeline:" << "\ti=" << i << "\tz_="
-							<< mpi_data_.hypercubeDimension_ << std::endl
-					;);
-			// todo: measure idle time
-			while (waiting_)
-				Probe();
-		}
-	}
-}
+//void MP_LAMP::Steal2() {
+//	DBG(D(3) << "Steal" << std::endl
+//	;);
+//	if (mpi_data.nTotalProc_ == 1)
+//		return;
+//
+//	// random steal
+//	for (int i = 0; i < mpi_data.nRandStealTrials_ && node_stack_->Empty();
+//			i++) {
+//		// todo: log steal trial
+//		int victim = mpi_data.victims_[mpi_data.rand_m_()];
+//		SendRequest(victim, -1);
+//		waiting_ = true;
+//		DBG(D(2) << "Steal Random:" << "\trandom counter=" << i << std::endl
+//		;);
+//		// todo: measure idle time
+//		while (waiting_)
+//			Probe();
+//	}
+//	if (dtd_.terminated_)
+//		return;
+//
+//	// lifeline steal
+//	for (int i = 0; i < mpi_data.hypercubeDimension_ && node_stack_->Empty();
+//			i++) {
+//		int lifeline = mpi_data.lifelines_[i];
+//		if (lifeline < 0)
+//			break; // break if -1
+//		if (!mpi_data.lifelines_activated_[lifeline]) {
+//			mpi_data.lifelines_activated_[lifeline] = true;
+//			// becomes false only at RecvGive
+//			SendRequest(lifeline, 1);
+//			waiting_ = true;
+//			DBG(
+//					D(2) << "Steal Lifeline:" << "\ti=" << i << "\tz_="
+//							<< mpi_data.hypercubeDimension_ << std::endl
+//					;);
+//			// todo: measure idle time
+//			while (waiting_)
+//				Probe();
+//		}
+//	}
+//}
 
 // mainloop
 void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data,
@@ -2757,20 +2721,20 @@ void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data,
 	while (!dtd_.terminated_) {
 		while (!dtd_.terminated_) {
 			if (ProcessNode(mpi_data, treesearch_data, getminsup_data,
-					 (GetTestableData*) NULL)) {
+					(GetTestableData*) NULL)) {
 				log_.d_.node_stack_max_itm_ =
 						std::max(log_.d_.node_stack_max_itm_,
 								(long long int) (treesearch_data->node_stack_->NuItemset()));
 				log_.d_.node_stack_max_cap_ =
 						std::max(log_.d_.node_stack_max_cap_,
 								(long long int) (treesearch_data->node_stack_->UsedCapacity()));
-				Probe();
+				Probe(mpi_data);
 				if (dtd_.terminated_)
 					break;
-				Distribute();
-				Reject(); // distribute finished, reject remaining requests
+				Distribute(mpi_data);
+				Reject(mpi_data); // distribute finished, reject remaining requests
 				if (mpi_data.mpiRank_ == 0)
-					CheckCSThreshold();
+					CheckCSThreshold(mpi_data);
 			} else
 				break;
 		}
@@ -2778,34 +2742,33 @@ void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data,
 			break;
 
 		log_.idle_start_ = timer_->Elapsed();
-		Reject(); // node_stack_ empty. reject requests
-		Steal(); // request steal
+		Reject(mpi_data); // node_stack_ empty. reject requests
+		Steal(mpi_data); // request steal
 		if (dtd_.terminated_) {
 			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 			break;
 		}
 
-		Probe();
+		Probe(mpi_data);
 		if (dtd_.terminated_) {
 			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 			break;
 		}
 		if (mpi_data.mpiRank_ == 0)
-			CheckCSThreshold();
+			CheckCSThreshold(mpi_data);
 		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 	}
 
 }
 
 void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data,
-		GetTestableData* gettestable_data) {
+		TreeSearchData* treesearch_data, GetTestableData* gettestable_data) {
 	phase_ = 2;
 	DBG(D(1) << "MainLoop" << std::endl
 	;);
 	while (!dtd_.terminated_) {
 		while (!dtd_.terminated_) {
-			if (ProcessNode(mpi_data, treesearch_data, (GetMinSupData*)NULL,
+			if (ProcessNode(mpi_data, treesearch_data, (GetMinSupData*) NULL,
 					gettestable_data)) {
 				log_.d_.node_stack_max_itm_ = std::max(
 						log_.d_.node_stack_max_itm_,
@@ -2813,11 +2776,11 @@ void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data,
 				log_.d_.node_stack_max_cap_ = std::max(
 						log_.d_.node_stack_max_cap_,
 						(long long int) (node_stack_->UsedCapacity()));
-				Probe();
+				Probe(mpi_data);
 				if (dtd_.terminated_)
 					break;
-				Distribute();
-				Reject(); // distribute finished, reject remaining requests
+				Distribute(mpi_data);
+				Reject(mpi_data); // distribute finished, reject remaining requests
 			} else
 				break;
 		}
@@ -2825,14 +2788,14 @@ void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data,
 			break;
 
 		log_.idle_start_ = timer_->Elapsed();
-		Reject(); // node_stack_ empty. reject requests
-		Steal(); // request steal
+		Reject(mpi_data); // node_stack_ empty. reject requests
+		Steal(mpi_data); // request steal
 		if (dtd_.terminated_) {
 			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 			break;
 		}
 
-		Probe();
+		Probe(mpi_data);
 		if (dtd_.terminated_) {
 			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 			break;
@@ -2850,10 +2813,10 @@ void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data,
 
 	ExtractSignificantSet();
 	if (mpi_data.mpiRank_ == 0)
-		SendResultRequest();
+		SendResultRequest(mpi_data);
 
 	while (!dtd_.terminated_)
-		Probe();
+		Probe(mpi_data);
 
 }
 
@@ -2864,7 +2827,7 @@ void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data,
 //	if (phase_ == 1 || phase_ == 2) {
 //		while (!dtd_.terminated_) {
 //			while (!dtd_.terminated_) {
-//				if (ProcessNode(mpi_data_.granularity_)) {
+//				if (ProcessNode(mpi_data.granularity_)) {
 //					log_.d_.node_stack_max_itm_ = std::max(
 //							log_.d_.node_stack_max_itm_,
 //							(long long int) (node_stack_->NuItemset()));
@@ -2876,7 +2839,7 @@ void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data,
 //						break;
 //					Distribute();
 //					Reject(); // distribute finished, reject remaining requests
-//					if (mpi_data_.mpiRank_ == 0 && phase_ == 1)
+//					if (mpi_data.mpiRank_ == 0 && phase_ == 1)
 //						CheckCSThreshold();
 //				} else
 //					break;
@@ -2897,13 +2860,13 @@ void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data,
 //				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 //				break;
 //			}
-//			if (mpi_data_.mpiRank_ == 0 && phase_ == 1)
+//			if (mpi_data.mpiRank_ == 0 && phase_ == 1)
 //				CheckCSThreshold();
 //			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 //		}
 //	} else if (phase_ == 3) {
 //		ExtractSignificantSet();
-//		if (mpi_data_.mpiRank_ == 0)
+//		if (mpi_data.mpiRank_ == 0)
 //			SendResultRequest();
 //
 //		while (!dtd_.terminated_)
@@ -2913,57 +2876,57 @@ void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data,
 //}
 
 // mainloop for straw man 1
-void MP_LAMP::MainLoopStraw1() {
-	DBG(D(1) << "MainLoop" << std::endl
-	;);
-	if (phase_ == 1 || phase_ == 2) {
-		while (!dtd_.terminated_) {
-			while (!dtd_.terminated_) {
-				if (ProcessNodeStraw1(mpi_data_.granularity_)) {
-					log_.d_.node_stack_max_itm_ = std::max(
-							log_.d_.node_stack_max_itm_,
-							(long long int) (node_stack_->NuItemset()));
-					log_.d_.node_stack_max_cap_ = std::max(
-							log_.d_.node_stack_max_cap_,
-							(long long int) (node_stack_->UsedCapacity()));
-					Probe();
-					if (dtd_.terminated_)
-						break;
-					if (mpi_data_.mpiRank_ == 0 && phase_ == 1)
-						CheckCSThreshold();
-				} else
-					break;
-			}
-			if (dtd_.terminated_)
-				break;
-
-			log_.idle_start_ = timer_->Elapsed();
-
-			Probe();
-			if (dtd_.terminated_) {
-				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-				break;
-			}
-			if (mpi_data_.mpiRank_ == 0 && phase_ == 1)
-				CheckCSThreshold();
-			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-		}
-	} else if (phase_ == 3) {
-		ExtractSignificantSet();
-		if (mpi_data_.mpiRank_ == 0)
-			SendResultRequest();
-
-		while (!dtd_.terminated_)
-			Probe();
-	}
-
-}
+//void MP_LAMP::MainLoopStraw1() {
+//	DBG(D(1) << "MainLoop" << std::endl
+//	;);
+//	if (phase_ == 1 || phase_ == 2) {
+//		while (!dtd_.terminated_) {
+//			while (!dtd_.terminated_) {
+//				if (ProcessNodeStraw1(mpi_data.granularity_)) {
+//					log_.d_.node_stack_max_itm_ = std::max(
+//							log_.d_.node_stack_max_itm_,
+//							(long long int) (node_stack_->NuItemset()));
+//					log_.d_.node_stack_max_cap_ = std::max(
+//							log_.d_.node_stack_max_cap_,
+//							(long long int) (node_stack_->UsedCapacity()));
+//					Probe();
+//					if (dtd_.terminated_)
+//						break;
+//					if (mpi_data.mpiRank_ == 0 && phase_ == 1)
+//						CheckCSThreshold();
+//				} else
+//					break;
+//			}
+//			if (dtd_.terminated_)
+//				break;
+//
+//			log_.idle_start_ = timer_->Elapsed();
+//
+//			Probe();
+//			if (dtd_.terminated_) {
+//				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//				break;
+//			}
+//			if (mpi_data.mpiRank_ == 0 && phase_ == 1)
+//				CheckCSThreshold();
+//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//		}
+//	} else if (phase_ == 3) {
+//		ExtractSignificantSet();
+//		if (mpi_data.mpiRank_ == 0)
+//			SendResultRequest();
+//
+//		while (!dtd_.terminated_)
+//			Probe();
+//	}
+//
+//}
 
 //==============================================================================
 
-bool MP_LAMP::IsLeaf() const {
+bool MP_LAMP::IsLeaf(MPI_Data& mpi_data) const {
 	for (int i = 0; i < k_echo_tree_branch; i++)
-		if (mpi_data_.bcast_targets_[i] >= 0)
+		if (mpi_data.bcast_targets_[i] >= 0)
 			return false;
 	return true;
 }
