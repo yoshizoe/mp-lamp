@@ -97,9 +97,9 @@ MP_LAMP::MP_LAMP(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
 		NULL), g_(NULL), bsh_(NULL), timer_(Timer::GetInstance()), cs_thr_(
 		NULL), dtd_accum_array_base_(
 		NULL), accum_array_(NULL), dtd_accum_recv_base_(NULL), accum_recv_(
-		NULL), node_stack_(NULL), give_stack_(NULL), processing_node_(false), waiting_(
-				false), stealer_(mpi_data_.nRandStealTrials_,
-				mpi_data_.hypercubeDimension_), phase_(0), sup_buf_(
+		NULL), give_stack_(NULL), waiting_(false), stealer_(
+				mpi_data_.nRandStealTrials_, mpi_data_.hypercubeDimension_), phase_(
+				0), sup_buf_(
 		NULL), child_sup_buf_(NULL), freq_stack_(NULL), significant_stack_(
 		NULL), total_expand_num_(0ll), expand_num_(0ll), closed_set_num_(0ll), final_closed_set_num_(
 				0ll), final_support_(0), final_sig_level_(0.0), last_bcast_was_dtd_(
@@ -296,6 +296,9 @@ MP_LAMP::~MP_LAMP() {
 	if (bsh_)
 		delete bsh_;
 	int size;
+
+//	delete mpi_data_;
+//	delete treesearch_data_;
 
 	DBG(D(2) << "MP_LAMP destructor end" << std::endl
 	;);
@@ -821,11 +824,11 @@ void MP_LAMP::SendDTDReply() {
 	// for Steal
 	dtd_.not_empty_ = !(node_stack_->Empty())
 			|| (mpi_data_.thieves_->Size() > 0) || stealer_.StealStarted()
-			|| processing_node_; // thieves_ and stealer state check
+			|| mpi_data_.processing_node_; // thieves_ and stealer state check
 	// for Steal2
 	// dtd_.not_empty_ =
 	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
-	//     waiting_ || processing_node_;
+	//     waiting_ || mpi_data_.processing_node_;
 	bool em_flag = dtd_.not_empty_ || dtd_.reduce_not_empty_;
 	message[2] = (em_flag ? 1 : 0);
 	DBG(
@@ -927,11 +930,11 @@ void MP_LAMP::SendDTDAccumReply() {
 	// for Steal
 	dtd_.not_empty_ = !(node_stack_->Empty())
 			|| (mpi_data_.thieves_->Size() > 0) || stealer_.StealStarted()
-			|| processing_node_; // thieves_ and stealer state check
+			|| mpi_data_.processing_node_; // thieves_ and stealer state check
 	// for Steal2
 	// dtd_.not_empty_ =
 	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
-	//     waiting_ || processing_node_;
+	//     waiting_ || mpi_data_.processing_node_;
 	bool em_flag = dtd_.not_empty_ || dtd_.reduce_not_empty_;
 	dtd_accum_array_base_[2] = (em_flag ? 1 : 0);
 
@@ -1068,6 +1071,11 @@ void MP_LAMP::RecvBcastFinish(int src) {
 //==============================================================================
 
 void MP_LAMP::Search() {
+	TreeSearchData* treesearch_data_ = new TreeSearchData(node_stack_);
+	GetMinSupData* getminsup_data_;
+	GetTestableData* gettestable_data_;
+	GetSignificantData* getsignificant_data_;
+
 	log_.d_.search_start_time_ = timer_->Elapsed();
 	total_expand_num_ = 0ll;
 
@@ -1159,7 +1167,11 @@ void MP_LAMP::Search() {
 								/ GIGA << std::endl
 				;);
 
-		GetMinimalSupport(mpi_data_);
+		getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_); // The name Phase1 is already so nonsense...
+		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
+		lambda_max_ = getminsup_data_->lambda_max_;
+		lambda_ = getminsup_data_->lambda_;
+		cs_thr_ = getminsup_data_->cs_thr_; // no needed? trickey.
 
 		// todo: reduce expand_num_
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
@@ -1251,7 +1263,12 @@ void MP_LAMP::Search() {
 				;);
 
 		sig_level_ = int_sig_lev;
-		GetTestablePatterns(mpi_data_);
+		gettestable_data_ = new GetTestableData(freq_stack_, freq_map_,
+				sig_level_);
+		GetTestablePatterns(mpi_data_, treesearch_data_, gettestable_data_);
+		freq_stack_ = gettestable_data_->freq_stack_;
+		freq_map_ = gettestable_data_->freq_map_;
+		sig_level_ = gettestable_data_->sig_level_;
 	}
 
 	DBG(D(1) << "closed_set_num=" << closed_set_num_ << std::endl
@@ -1312,7 +1329,9 @@ void MP_LAMP::Search() {
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
 	{
-		GetSignificantPatterns(mpi_data_);
+		getsignificant_data_ = new GetSignificantData();
+		GetSignificantPatterns(mpi_data_, getsignificant_data_);
+		// TODO: put back to global variables.
 	}
 
 	// copy only significant itemset to buffer
@@ -1784,7 +1803,8 @@ void MP_LAMP::PreProcessRootNode() {
 			;);
 }
 
-bool MP_LAMP::ProcessNode(int n) {
+bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+		GetMinSupData* getminsup_data, GetTestableData* gettestable_data) {
 	if (node_stack_->Empty())
 		return false;
 	long long int start_time, lap_time;
@@ -1792,26 +1812,29 @@ bool MP_LAMP::ProcessNode(int n) {
 	lap_time = start_time;
 
 	int processed = 0;
-	processing_node_ = true;
-	while (!node_stack_->Empty()) {
+	mpi_data.processing_node_ = true;
+	while (!treesearch_data->node_stack_->Empty()) {
 		processed++;
 		expand_num_++;
 
-		node_stack_->CopyItem(node_stack_->Top(), itemset_buf_);
-		node_stack_->Pop();
+		treesearch_data->node_stack_->CopyItem(
+				treesearch_data->node_stack_->Top(), itemset_buf_);
+		treesearch_data->node_stack_->Pop();
 
 		// dbg
 		DBG(D(3) << "expanded "
 		;);
-		DBG(node_stack_->Print(D(3), itemset_buf_)
+		DBG(treesearch_data->node_stack_->Print(D(3), itemset_buf_)
 		;);
 
+		// TODO: THIS SHIT IS DEPENDENT ON bsh_
 		// calculate support from itemset_buf_
 		bsh_->Set(sup_buf_);
 		{
-			int n = node_stack_->GetItemNum(itemset_buf_);
+			int n = treesearch_data->node_stack_->GetItemNum(itemset_buf_);
 			for (int i = 0; i < n; i++) {
-				int item = node_stack_->GetNthItem(itemset_buf_, i);
+				int item = treesearch_data->node_stack_->GetNthItem(itemset_buf_,
+						i);
 				bsh_->And(d_->NthData(item), sup_buf_);
 			}
 		}
@@ -1821,21 +1844,25 @@ bool MP_LAMP::ProcessNode(int n) {
 		int * ppc_ext_buf;
 		// todo: use database reduction
 
-		assert(phase_ != 1 || node_stack_->GetItemNum(itemset_buf_) != 0);
+		assert(
+				phase_ != 1
+						|| treesearch_data->node_stack_->GetItemNum(itemset_buf_)
+								!= 0);
 
-		bool is_root_node = (node_stack_->GetItemNum(itemset_buf_) == 0);
+		bool is_root_node = (treesearch_data->node_stack_->GetItemNum(
+				itemset_buf_) == 0);
 
 		int accum_period_counter_ = 0;
 		// reverse order
 		// for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
 		for (int new_item = d_->NextItemInReverseLoop(is_root_node,
-				mpi_data_.mpiRank_, mpi_data_.nTotalProc_, d_->NuItems());
+				mpi_data.mpiRank_, mpi_data.nTotalProc_, d_->NuItems());
 				new_item >= core_i + 1;
 				new_item = d_->NextItemInReverseLoop(is_root_node,
-						mpi_data_.mpiRank_, mpi_data_.nTotalProc_, new_item)) {
+						mpi_data.mpiRank_, mpi_data.nTotalProc_, new_item)) {
 			// skip existing item
 			// todo: improve speed here
-			if (node_stack_->Exist(itemset_buf_, new_item))
+			if (treesearch_data->node_stack_->Exist(itemset_buf_, new_item))
 				continue;
 
 			{      // Periodic probe. (do in both phases)
@@ -1882,44 +1909,47 @@ bool MP_LAMP::ProcessNode(int n) {
 			if (sup_num < lambda_)
 				continue;
 
-			node_stack_->PushPre();
-			ppc_ext_buf = node_stack_->Top();
+			treesearch_data->node_stack_->PushPre();
+			ppc_ext_buf = treesearch_data->node_stack_->Top();
 
-			bool res = g_->PPCExtension(node_stack_, itemset_buf_,
-					child_sup_buf_, core_i, new_item, ppc_ext_buf);
+			bool res = g_->PPCExtension(treesearch_data->node_stack_,
+					itemset_buf_, child_sup_buf_, core_i, new_item,
+					ppc_ext_buf);
 
-			node_stack_->SetSup(ppc_ext_buf, sup_num);
-			node_stack_->PushPostNoSort();
+			treesearch_data->node_stack_->SetSup(ppc_ext_buf, sup_num);
+			treesearch_data->node_stack_->PushPostNoSort();
 
 			if (!res) {        // todo: remove this redundancy
-				node_stack_->Pop();
+				treesearch_data->node_stack_->Pop();
 			} else {
-				node_stack_->SortTop();
+				treesearch_data->node_stack_->SortTop();
 
 				DBG(if (phase_ == 2) {
 					D(3) << "found cs "
 					;
-					node_stack_->Print(D(3), ppc_ext_buf)
+					treesearch_data->node_stack_->Print(D(3), ppc_ext_buf)
 					;
 				});
 
 				if (phase_ == 1)
 					IncCsAccum(sup_num); // increment closed_set_num_array
-				if (phase_ == 2)
+				if (phase_ == 2) {
 					closed_set_num_++;
+					if (FLAGS_third_phase) {
+						int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
+								child_sup_buf_);
+						double pval = d_->PVal(sup_num, pos_sup_num);
+						assert(pval >= 0.0);
+						if (pval <= gettestable_data->sig_level_) { // permits == case?
+							gettestable_data->freq_stack_->PushPre();
+							int * item = gettestable_data->freq_stack_->Top();
+							gettestable_data->freq_stack_->CopyItem(ppc_ext_buf,
+									item);
+							gettestable_data->freq_stack_->PushPostNoSort();
 
-				if (phase_ == 2 && FLAGS_third_phase) {
-					int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
-							child_sup_buf_);
-					double pval = d_->PVal(sup_num, pos_sup_num);
-					assert(pval >= 0.0);
-					if (pval <= sig_level_) { // permits == case?
-						freq_stack_->PushPre();
-						int * item = freq_stack_->Top();
-						freq_stack_->CopyItem(ppc_ext_buf, item);
-						freq_stack_->PushPostNoSort();
-
-						freq_map_.insert(std::pair<double, int*>(pval, item));
+							gettestable_data->freq_map_.insert(
+									std::pair<double, int*>(pval, item));
+						}
 					}
 				}
 
@@ -1934,8 +1964,8 @@ bool MP_LAMP::ProcessNode(int n) {
 			}
 		}
 
-		if (CheckProcessNodeEnd(n, mpi_data_.isGranularitySec_, processed,
-				start_time))
+		if (CheckProcessNodeEnd(mpi_data_.granularity_,
+				mpi_data_.isGranularitySec_, processed, start_time))
 			break;
 	}
 
@@ -1948,7 +1978,7 @@ bool MP_LAMP::ProcessNode(int n) {
 					<< elapsed_time << std::endl
 			;);
 
-	processing_node_ = false;
+	mpi_data_.processing_node_ = false;
 	return true;
 }
 
@@ -1960,7 +1990,7 @@ bool MP_LAMP::ProcessNodeStraw1(int n) {
 	lap_time = start_time;
 
 	int processed = 0;
-	processing_node_ = true;
+	mpi_data_.processing_node_ = true;
 	while (!node_stack_->Empty()) {
 		processed++;
 		expand_num_++;
@@ -2112,7 +2142,7 @@ bool MP_LAMP::ProcessNodeStraw1(int n) {
 					<< elapsed_time << std::endl
 			;);
 
-	processing_node_ = false;
+	mpi_data_.processing_node_ = false;
 	return true;
 }
 
@@ -2719,25 +2749,27 @@ void MP_LAMP::Steal2() {
 }
 
 // mainloop
-void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data) {
+void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data,
+		TreeSearchData* treesearch_data, GetMinSupData* getminsup_data) {
 	phase_ = 1;
 	DBG(D(1) << "MainLoop" << std::endl
 	;);
 	while (!dtd_.terminated_) {
 		while (!dtd_.terminated_) {
-			if (ProcessNode(mpi_data_.granularity_)) {
-				log_.d_.node_stack_max_itm_ = std::max(
-						log_.d_.node_stack_max_itm_,
-						(long long int) (node_stack_->NuItemset()));
-				log_.d_.node_stack_max_cap_ = std::max(
-						log_.d_.node_stack_max_cap_,
-						(long long int) (node_stack_->UsedCapacity()));
+			if (ProcessNode(mpi_data, treesearch_data, getminsup_data,
+					 (GetTestableData*) NULL)) {
+				log_.d_.node_stack_max_itm_ =
+						std::max(log_.d_.node_stack_max_itm_,
+								(long long int) (treesearch_data->node_stack_->NuItemset()));
+				log_.d_.node_stack_max_cap_ =
+						std::max(log_.d_.node_stack_max_cap_,
+								(long long int) (treesearch_data->node_stack_->UsedCapacity()));
 				Probe();
 				if (dtd_.terminated_)
 					break;
 				Distribute();
 				Reject(); // distribute finished, reject remaining requests
-				if (mpi_data_.mpiRank_ == 0)
+				if (mpi_data.mpiRank_ == 0)
 					CheckCSThreshold();
 			} else
 				break;
@@ -2758,20 +2790,23 @@ void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data) {
 			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 			break;
 		}
-		if (mpi_data_.mpiRank_ == 0)
+		if (mpi_data.mpiRank_ == 0)
 			CheckCSThreshold();
 		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 	}
 
 }
 
-void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data) {
+void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data,
+		TreeSearchData* treesearch_data,
+		GetTestableData* gettestable_data) {
 	phase_ = 2;
 	DBG(D(1) << "MainLoop" << std::endl
 	;);
 	while (!dtd_.terminated_) {
 		while (!dtd_.terminated_) {
-			if (ProcessNode(mpi_data_.granularity_)) {
+			if (ProcessNode(mpi_data, treesearch_data, (GetMinSupData*)NULL,
+					gettestable_data)) {
 				log_.d_.node_stack_max_itm_ = std::max(
 						log_.d_.node_stack_max_itm_,
 						(long long int) (node_stack_->NuItemset()));
@@ -2808,12 +2843,13 @@ void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data) {
 
 }
 
-void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data) {
+void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data,
+		GetSignificantData* getsignificant_data) {
 	DBG(D(1) << "MainLoop" << std::endl
 	;);
 
 	ExtractSignificantSet();
-	if (mpi_data_.mpiRank_ == 0)
+	if (mpi_data.mpiRank_ == 0)
 		SendResultRequest();
 
 	while (!dtd_.terminated_)

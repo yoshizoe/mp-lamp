@@ -138,7 +138,6 @@ public:
 	void SearchStraw2(); // centralized queue
 	void MainLoopStraw2();
 
-
 	const Database<uint64> & GetDatabase() {
 		return *d_;
 	}
@@ -155,10 +154,53 @@ public:
 	std::ostream & PrintPLog(std::ostream & out);
 	std::ostream & PrintAggrPLog(std::ostream & out);
 
+	struct TreeSearchData {
+		TreeSearchData(VariableLengthItemsetStack * stack) :
+				node_stack_(stack) {
+		}
+		// Search fields
+		VariableLengthItemsetStack * node_stack_;
+
+		// Domain fields. TODO: Way to wacky to be dependent on these...
+//		Database<uint64> * d_;
+//		LampGraph<uint64> * g_;
+//		VariableBitsetHelper<uint64> * bsh_; // bitset helper
+//
+//		// Utils
+//		Log *log_;
+//		Timer * timer_;
+	};
+	struct GetMinSupData {
+		GetMinSupData(int lambda_max, int lambda, long long int* cs_thr) :
+				lambda_max_(lambda_max), lambda_(lambda), cs_thr_(cs_thr) {
+		}
+		int lambda_max_;
+		int lambda_;
+		long long int * cs_thr_;
+
+	};
+	struct GetTestableData {
+		GetTestableData(VariableLengthItemsetStack * freq_stack,
+				std::multimap<double, int *> freq_map, double sig_level) :
+				freq_stack_(freq_stack), freq_map_(freq_map), sig_level_(
+						sig_level) {
+		}
+		// Retrun variables. Used for GetSignificantPatterns.
+		VariableLengthItemsetStack * freq_stack_; // record freq itemsets
+		std::multimap<double, int *> freq_map_; // record (pval, *itemsets)
+		double sig_level_;
+	};
+	struct GetSignificantData {
+
+	};
+
 private:
-	void GetMinimalSupport(MPI_Data& mpi_data);
-	void GetTestablePatterns(MPI_Data& mpi_data);
-	void GetSignificantPatterns(MPI_Data& mpi_data);
+	void GetMinimalSupport(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+			GetMinSupData* getminsup_data_);
+	void GetTestablePatterns(MPI_Data& mpi_data,
+			TreeSearchData* treesearch_data, GetTestableData* gettestable_data);
+	void GetSignificantPatterns(MPI_Data& mpi_data,
+			GetSignificantData* getsignificant_data);
 
 	static const int k_int_max;
 	// assuming (digits in long long int) > (bits of double mantissa)
@@ -182,15 +224,15 @@ private:
 	Log log_;
 	Timer * timer_;
 
+	// Domain Data is included here for now.
+
+	// TODO: These variables should be temporary instead of field...
+//	TreeSearchData treesearch_data_;
+//	GetMinSupData getminsup_data_; // The name Phase1 is already so nonsense...
+//	GetTestableData gettestable_data_;
+//	GetSignificantData getsignificant_data_;
+
 	// variables for LAMP
-	struct GetMinimalSupportData {
-		int lambda_max_;
-		int lambda_;
-		long long int * cs_thr_;
-	};
-
-	GetMinimalSupportData get_min_sup_data; // The name Phase1 is already so nonsense...
-
 	int lambda_max_; // equals to maximum support of single item // getMinSup
 	// initially set to 1. will be incremented to N if cs_thr[N] exceeded
 	// in 1st phase, search will be pruned if (sup_num < lambda_)
@@ -235,7 +277,6 @@ private:
 
 	// periodic closed set count reduce.
 	void Probe();
-	bool processing_node_; // prevent termination while processing node
 
 	// void ProbeAccumTask();
 	// void ProbeBasicTask();
@@ -341,7 +382,8 @@ private:
 	void PreProcessRootNode();
 
 	// provide int n and bool n_is_ms_ (if n_is_ms_==false, it shows number of nodes)
-	bool ProcessNode(int n);
+	bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data,
+			GetMinSupData* getminsup_data_, GetTestableData* gettestable_data);
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 			long long int start_time);
 

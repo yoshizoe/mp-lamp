@@ -22,6 +22,8 @@ struct MPI_Data {
 					ComputeZ(nTotalProc_, lHypercubeEdge_)), rng_(mpiRank_), dst_p_(
 					0, nTotalProc_ - 1), dst_m_(0, nRandStealCands_ - 1), rand_p_(rng_, dst_p_), rand_m_(
 					rng_, dst_m_) {
+		// Initializing temporary variables in parenths.
+		processing_node_ = false;
 	}
 	~MPI_Data() {
 		delete[] victims_;
@@ -76,6 +78,9 @@ struct MPI_Data {
 	FixedSizeStack * thieves_; // max size == nu_proc_
 	FixedSizeStack * lifeline_thieves_; // size == lifelines_ size + 3
 	bool * lifelines_activated_;
+
+	// Temporary variables
+	bool processing_node_; // prevent termination while processing node
 
 };
 }
