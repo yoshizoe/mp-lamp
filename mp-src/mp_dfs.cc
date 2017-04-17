@@ -93,10 +93,9 @@ const int MP_LAMP::k_probe_period = 128;
 
 MP_LAMP::MP_LAMP(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
 		int m) :
-		mpi_data_(FLAGS_bsend_buffer_size, rank, nu_proc, n, n_is_ms, w, l, m,
-				k_echo_tree_branch), dtd_(k_echo_tree_branch), d_(
-		NULL), g_(NULL), bsh_(NULL), timer_(Timer::GetInstance()), cs_thr_(
-		NULL), dtd_accum_array_base_(
+		dtd_(k_echo_tree_branch), mpi_data_(FLAGS_bsend_buffer_size, rank,
+				nu_proc, n, n_is_ms, w, l, m, k_echo_tree_branch, &dtd_), d_(
+		NULL), g_(NULL), bsh_(NULL), timer_(Timer::GetInstance()), dtd_accum_array_base_(
 		NULL), accum_array_(NULL), dtd_accum_recv_base_(NULL), accum_recv_(
 		NULL), give_stack_(NULL), waiting_(false), stealer_(
 				mpi_data_.nRandStealTrials_, mpi_data_.hypercubeDimension_), phase_(
@@ -122,8 +121,6 @@ MP_LAMP::MP_LAMP(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
 //	printf("bsend_buffer\n");
 
 // note: should remove victim if in lifeline ???
-
-
 
 	dtd_.Init();
 
@@ -215,8 +212,8 @@ MP_LAMP::~MP_LAMP() {
 
 //	if (pmin_thr_)
 //		delete[] pmin_thr_;
-	if (cs_thr_)
-		delete[] cs_thr_;
+//	if (cs_thr_)
+//		delete[] cs_thr_;
 	if (dtd_accum_array_base_)
 		delete[] dtd_accum_array_base_;
 	if (dtd_accum_recv_base_)
@@ -612,7 +609,7 @@ void MP_LAMP::ClearTasks() {
 
 //==============================================================================
 
-void MP_LAMP::Probe(MPI_Data& mpi_data) {
+void MP_LAMP::Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data) {
 	DBG(D(3) << "Probe" << std::endl
 	;);
 	MPI_Status probe_status;
@@ -631,10 +628,10 @@ void MP_LAMP::Probe(MPI_Data& mpi_data) {
 		switch (probe_tag) {
 		// control tasks
 		case Tag::DTD_REQUEST:
-			RecvDTDRequest(mpi_data, probe_src);
+			RecvDTDRequest(mpi_data, treesearch_data, probe_src);
 			break;
 		case Tag::DTD_REPLY:
-			RecvDTDReply(mpi_data, probe_src);
+			RecvDTDReply(mpi_data, treesearch_data, probe_src);
 			break;
 
 		case Tag::DTD_ACCUM_REQUEST:
@@ -657,13 +654,13 @@ void MP_LAMP::Probe(MPI_Data& mpi_data) {
 			break;
 
 		case Tag::REQUEST:
-			RecvRequest(mpi_data, probe_src);
+			RecvRequest(mpi_data, treesearch_data, probe_src);
 			break;
 		case Tag::REJECT:
 			RecvReject(mpi_data, probe_src);
 			break;
 		case Tag::GIVE:
-			RecvGive(mpi_data, probe_src, probe_status);
+			RecvGive(mpi_data, treesearch_data, probe_src, probe_status);
 			break;
 
 // third phase tasks
@@ -687,20 +684,21 @@ void MP_LAMP::Probe(MPI_Data& mpi_data) {
 
 	// capacity, lambda, phase
 	if (phase_ == 1 || phase_ == 2) {
-		assert(node_stack_);
-		log_.TakePeriodicLog(node_stack_->NuItemset(), lambda_, phase_);
+		assert(treesearch_data->node_stack_);
+		log_.TakePeriodicLog(treesearch_data->node_stack_->NuItemset(), lambda_,
+				phase_);
 	}
 
 	if (mpi_data.mpiRank_ == 0) {
 		// initiate termination detection
 
 		// note: for phase_ 1, accum request and dtd request are unified
-		if (!mpi_data.echo_waiting_ && !dtd_.terminated_) {
+		if (!mpi_data.echo_waiting_ && !mpi_data.dtd_->terminated_) {
 			if (phase_ == 1) {
 				SendDTDAccumRequest(mpi_data);
 				// log_.d_.dtd_accum_request_num_++;
 			} else if (phase_ == 2) {
-				if (node_stack_->Empty()) {
+				if (treesearch_data->node_stack_->Empty()) {
 					SendDTDRequest(mpi_data);
 					// log_.d_.dtd_request_num_++;
 				}
@@ -733,49 +731,55 @@ void MP_LAMP::SendDTDRequest(MPI_Data& mpi_data) {
 				Tag::DTD_REQUEST);
 		DBG(
 				D(3) << "SendDTDRequest: dst=" << mpi_data.bcast_targets_[i]
-						<< "\ttimezone=" << dtd_.time_zone_ << std::endl
+						<< "\ttimezone=" << mpi_data.dtd_->time_zone_
+						<< std::endl
 				;);
 	}
 }
 
-void MP_LAMP::RecvDTDRequest(MPI_Data& mpi_data, int src) {
+void MP_LAMP::RecvDTDRequest(MPI_Data& mpi_data,
+		TreeSearchData* treesearch_data, int src) {
 	DBG(
 			D(3) << "RecvDTDRequest: src=" << src << "\ttimezone="
-					<< dtd_.time_zone_ << std::endl
+					<< mpi_data.dtd_->time_zone_ << std::endl
 			;);
 	MPI_Status recv_status;
 	int message[1];
 	CallRecv(&message, 1, MPI_INT, src, Tag::DTD_REQUEST, &recv_status);
 
 	if (IsLeaf(mpi_data))
-		SendDTDReply(mpi_data);
+		SendDTDReply(mpi_data, treesearch_data);
 	else
 		SendDTDRequest(mpi_data);
 }
 
 bool MP_LAMP::DTDReplyReady(MPI_Data& mpi_data) const {
 	for (int i = 0; i < k_echo_tree_branch; i++)
-		if (mpi_data.bcast_targets_[i] >= 0 && !(dtd_.accum_flag_[i]))
+		if (mpi_data.bcast_targets_[i] >= 0 && !(mpi_data.dtd_->accum_flag_[i]))
 			return false;
 	return true;
 	// check only valid bcast_targets_
 	// always true if leaf
 }
 
-void MP_LAMP::SendDTDReply(MPI_Data& mpi_data) {
+void MP_LAMP::SendDTDReply(MPI_Data& mpi_data,
+		TreeSearchData* treesearch_data) {
 	int message[3];
 	// using reduced vars
-	message[0] = dtd_.count_ + dtd_.reduce_count_;
-	bool tw_flag = dtd_.time_warp_ || dtd_.reduce_time_warp_;
+	message[0] = mpi_data.dtd_->count_ + mpi_data.dtd_->reduce_count_;
+	bool tw_flag = mpi_data.dtd_->time_warp_
+			|| mpi_data.dtd_->reduce_time_warp_;
 	message[1] = (tw_flag ? 1 : 0);
 	// for Steal
-	dtd_.not_empty_ = !(node_stack_->Empty()) || (mpi_data.thieves_->Size() > 0)
-			|| stealer_.StealStarted() || mpi_data.processing_node_; // thieves_ and stealer state check
+	mpi_data.dtd_->not_empty_ = !(treesearch_data->node_stack_->Empty())
+			|| (mpi_data.thieves_->Size() > 0) || stealer_.StealStarted()
+			|| mpi_data.processing_node_; // thieves_ and stealer state check
 	// for Steal2
 	// dtd_.not_empty_ =
 	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
 	//     waiting_ || mpi_data.processing_node_;
-	bool em_flag = dtd_.not_empty_ || dtd_.reduce_not_empty_;
+	bool em_flag = mpi_data.dtd_->not_empty_
+			|| mpi_data.dtd_->reduce_not_empty_;
 	message[2] = (em_flag ? 1 : 0);
 	DBG(
 			D(3) << "SendDTDReply: dst = " << mpi_data.bcast_source_
@@ -786,37 +790,39 @@ void MP_LAMP::SendDTDReply(MPI_Data& mpi_data) {
 	assert(mpi_data.bcast_source_ < mpi_data.nTotalProc_ && "SendDTDReply");
 	CallBsend(message, 3, MPI_INT, mpi_data.bcast_source_, Tag::DTD_REPLY);
 
-	dtd_.time_warp_ = false;
-	dtd_.not_empty_ = false;
-	dtd_.IncTimeZone();
+	mpi_data.dtd_->time_warp_ = false;
+	mpi_data.dtd_->not_empty_ = false;
+	mpi_data.dtd_->IncTimeZone();
 
 	mpi_data.echo_waiting_ = false;
-	dtd_.ClearAccumFlags();
-	dtd_.ClearReduceVars();
+	mpi_data.dtd_->ClearAccumFlags();
+	mpi_data.dtd_->ClearReduceVars();
 }
 
-void MP_LAMP::RecvDTDReply(MPI_Data& mpi_data, int src) {
+void MP_LAMP::RecvDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+		int src) {
 	MPI_Status recv_status;
 	int message[3];
 	CallRecv(&message, 3, MPI_INT, src, Tag::DTD_REPLY, &recv_status);
 	assert(src == recv_status.MPI_SOURCE);
 
 	// reduce reply (count, time_warp, not_empty)
-	dtd_.Reduce(message[0], (message[1] != 0), (message[2] != 0));
+	mpi_data.dtd_->Reduce(message[0], (message[1] != 0), (message[2] != 0));
 
 	DBG(
 			D(3) << "RecvDTDReply: src=" << src << "\tcount=" << message[0]
 					<< "\ttw=" << message[1] << "\tem=" << message[2]
-					<< "\treduced_count=" << dtd_.reduce_count_
-					<< "\treduced_tw=" << dtd_.reduce_time_warp_
-					<< "\treduced_em=" << dtd_.reduce_not_empty_ << std::endl
+					<< "\treduced_count=" << mpi_data.dtd_->reduce_count_
+					<< "\treduced_tw=" << mpi_data.dtd_->reduce_time_warp_
+					<< "\treduced_em=" << mpi_data.dtd_->reduce_not_empty_
+					<< std::endl
 			;);
 
 	bool flag = false;
 	for (int i = 0; i < k_echo_tree_branch; i++) {
 		if (mpi_data.bcast_targets_[i] == src) {
 			flag = true;
-			dtd_.accum_flag_[i] = true;
+			mpi_data.dtd_->accum_flag_[i] = true;
 			break;
 		}
 	}
@@ -827,7 +833,7 @@ void MP_LAMP::RecvDTDReply(MPI_Data& mpi_data, int src) {
 			DTDCheck(mpi_data); // at root
 			log_.d_.dtd_phase_num_++;
 		} else
-			SendDTDReply(mpi_data);
+			SendDTDReply(mpi_data, treesearch_data);
 	}
 }
 
@@ -849,7 +855,7 @@ void MP_LAMP::SendDTDAccumRequest(MPI_Data& mpi_data) {
 		DBG(
 				D(3) << "SendDTDAccumRequest: dst="
 						<< mpi_data.bcast_targets_[i] << "\ttimezone="
-						<< dtd_.time_zone_ << std::endl
+						<< mpi_data.dtd_->time_zone_ << std::endl
 				;);
 	}
 }
@@ -857,7 +863,7 @@ void MP_LAMP::SendDTDAccumRequest(MPI_Data& mpi_data) {
 void MP_LAMP::RecvDTDAccumRequest(MPI_Data& mpi_data, int src) {
 	DBG(
 			D(3) << "RecvDTDAccumRequest: src=" << src << "\ttimezone="
-					<< dtd_.time_zone_ << std::endl
+					<< mpi_data.dtd_->time_zone_ << std::endl
 			;);
 	MPI_Status recv_status;
 	int message[1];
@@ -870,17 +876,21 @@ void MP_LAMP::RecvDTDAccumRequest(MPI_Data& mpi_data, int src) {
 }
 
 void MP_LAMP::SendDTDAccumReply(MPI_Data& mpi_data) {
-	dtd_accum_array_base_[0] = dtd_.count_ + dtd_.reduce_count_;
-	bool tw_flag = dtd_.time_warp_ || dtd_.reduce_time_warp_;
+	dtd_accum_array_base_[0] = mpi_data.dtd_->count_
+			+ mpi_data.dtd_->reduce_count_;
+	bool tw_flag = mpi_data.dtd_->time_warp_
+			|| mpi_data.dtd_->reduce_time_warp_;
 	dtd_accum_array_base_[1] = (tw_flag ? 1 : 0);
 	// for Steal
-	dtd_.not_empty_ = !(node_stack_->Empty()) || (mpi_data.thieves_->Size() > 0)
-			|| stealer_.StealStarted() || mpi_data.processing_node_; // thieves_ and stealer state check
+	mpi_data.dtd_->not_empty_ = !(node_stack_->Empty())
+			|| (mpi_data.thieves_->Size() > 0) || stealer_.StealStarted()
+			|| mpi_data.processing_node_; // thieves_ and stealer state check
 	// for Steal2
-	// dtd_.not_empty_ =
+	// mpi_data.dtd_->not_empty_ =
 	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
 	//     waiting_ || mpi_data.processing_node_;
-	bool em_flag = dtd_.not_empty_ || dtd_.reduce_not_empty_;
+	bool em_flag = mpi_data.dtd_->not_empty_
+			|| mpi_data.dtd_->reduce_not_empty_;
 	dtd_accum_array_base_[2] = (em_flag ? 1 : 0);
 
 	DBG(
@@ -895,13 +905,13 @@ void MP_LAMP::SendDTDAccumReply(MPI_Data& mpi_data) {
 	CallBsend(dtd_accum_array_base_, lambda_max_ + 4, MPI_LONG_LONG_INT,
 			mpi_data.bcast_source_, Tag::DTD_ACCUM_REPLY);
 
-	dtd_.time_warp_ = false;
-	dtd_.not_empty_ = false;
-	dtd_.IncTimeZone();
+	mpi_data.dtd_->time_warp_ = false;
+	mpi_data.dtd_->not_empty_ = false;
+	mpi_data.dtd_->IncTimeZone();
 
 	mpi_data.echo_waiting_ = false;
-	dtd_.ClearAccumFlags();
-	dtd_.ClearReduceVars();
+	mpi_data.dtd_->ClearAccumFlags();
+	mpi_data.dtd_->ClearReduceVars();
 
 	for (int l = 0; l <= lambda_max_; l++)
 		accum_array_[l] = 0ll;
@@ -918,14 +928,15 @@ void MP_LAMP::RecvDTDAccumReply(MPI_Data& mpi_data, int src) {
 	bool time_warp = (dtd_accum_recv_base_[1] != 0);
 	bool not_empty = (dtd_accum_recv_base_[2] != 0);
 
-	dtd_.Reduce(count, time_warp, not_empty);
+	mpi_data.dtd_->Reduce(count, time_warp, not_empty);
 
 	DBG(
 			D(3) << "RecvDTDAccumReply: src=" << src << "\tcount=" << count
 					<< "\ttw=" << time_warp << "\tem=" << not_empty
-					<< "\treduced_count=" << dtd_.reduce_count_
-					<< "\treduced_tw=" << dtd_.reduce_time_warp_
-					<< "\treduced_em=" << dtd_.reduce_not_empty_ << std::endl
+					<< "\treduced_count=" << mpi_data.dtd_->reduce_count_
+					<< "\treduced_tw=" << mpi_data.dtd_->reduce_time_warp_
+					<< "\treduced_em=" << mpi_data.dtd_->reduce_not_empty_
+					<< std::endl
 			;);
 
 	for (int l = lambda_ - 1; l <= lambda_max_; l++)
@@ -935,7 +946,7 @@ void MP_LAMP::RecvDTDAccumReply(MPI_Data& mpi_data, int src) {
 	for (int i = 0; i < k_echo_tree_branch; i++) {
 		if (mpi_data.bcast_targets_[i] == src) {
 			flag = true;
-			dtd_.accum_flag_[i] = true;
+			mpi_data.dtd_->accum_flag_[i] = true;
 			break;
 		}
 	}
@@ -961,24 +972,26 @@ void MP_LAMP::RecvDTDAccumReply(MPI_Data& mpi_data, int src) {
 void MP_LAMP::DTDCheck(MPI_Data& mpi_data) {
 	assert(mpi_data.mpiRank_ == 0);
 	// (count, time_warp, not_empty)
-	dtd_.Reduce(dtd_.count_, dtd_.time_warp_, dtd_.not_empty_);
+	mpi_data.dtd_->Reduce(mpi_data.dtd_->count_, mpi_data.dtd_->time_warp_,
+			mpi_data.dtd_->not_empty_);
 
-	if (dtd_.reduce_count_ == 0 && dtd_.reduce_time_warp_ == false
-			&& dtd_.reduce_not_empty_ == false) {
+	if (mpi_data.dtd_->reduce_count_ == 0
+			&& mpi_data.dtd_->reduce_time_warp_ == false
+			&& mpi_data.dtd_->reduce_not_empty_ == false) {
 		// termination
 		SendBcastFinish(mpi_data);
-		dtd_.terminated_ = true;
+		mpi_data.dtd_->terminated_ = true;
 		DBG(D(1) << "terminated" << std::endl
 		;);
 	}
 	// doing same thing as SendDTDReply
-	dtd_.time_warp_ = false;
-	dtd_.not_empty_ = false;
-	dtd_.IncTimeZone();
+	mpi_data.dtd_->time_warp_ = false;
+	mpi_data.dtd_->not_empty_ = false;
+	mpi_data.dtd_->IncTimeZone();
 
 	mpi_data.echo_waiting_ = false;
-	dtd_.ClearAccumFlags();
-	dtd_.ClearReduceVars();
+	mpi_data.dtd_->ClearAccumFlags();
+	mpi_data.dtd_->ClearReduceVars();
 }
 
 void MP_LAMP::SendBcastFinish(MPI_Data& mpi_data) {
@@ -1006,7 +1019,7 @@ void MP_LAMP::RecvBcastFinish(MPI_Data& mpi_data, int src) {
 	CallRecv(&message, 1, MPI_INT, src, Tag::BCAST_FINISH, &recv_status);
 
 	SendBcastFinish(mpi_data);
-	dtd_.terminated_ = true;
+	mpi_data.dtd_->terminated_ = true;
 	DBG(D(2) << "terminated" << std::endl
 	;);
 
@@ -1016,7 +1029,8 @@ void MP_LAMP::RecvBcastFinish(MPI_Data& mpi_data, int src) {
 //==============================================================================
 
 void MP_LAMP::Search() {
-	TreeSearchData* treesearch_data_ = new TreeSearchData(node_stack_);
+	TreeSearchData* treesearch_data_ = new TreeSearchData(node_stack_, d_, g_,
+			bsh_, &log_, timer_);
 	GetMinSupData* getminsup_data_;
 	GetTestableData* gettestable_data_;
 	GetSignificantData* getsignificant_data_;
@@ -1210,7 +1224,7 @@ void MP_LAMP::Search() {
 				;);
 
 		sig_level_ = int_sig_lev;
-		gettestable_data_ = new GetTestableData(freq_stack_, freq_map_,
+		gettestable_data_ = new GetTestableData(lambda_, freq_stack_, freq_map_,
 				sig_level_);
 		GetTestablePatterns(mpi_data_, treesearch_data_, gettestable_data_);
 		freq_stack_ = gettestable_data_->freq_stack_;
@@ -1223,7 +1237,7 @@ void MP_LAMP::Search() {
 
 	long long int closed_set_num_reduced;
 	MPI_Reduce(&closed_set_num_, &closed_set_num_reduced, 1, MPI_LONG_LONG_INT,
-	MPI_SUM, 0, MPI_COMM_WORLD);
+	MPI_SUM, 0, MPI_COMM_WORLD); // error?
 
 	DBG(if (mpi_data_.mpiRank_ == 0)
 		D(1) << "closed_set_num_reduced=" << closed_set_num_reduced << std::endl
@@ -1684,9 +1698,10 @@ void MP_LAMP::PreProcessRootNode() {
 				lambda_ = NextLambdaThr();
 		}
 	}
-
+//	 TODO: lambda_max_ is wrong???
+	printf("lambda_max_ = %d\n", lambda_max_);
 	MPI_Reduce(accum_array_, accum_recv_, lambda_max_ + 1, MPI_LONG_LONG_INT,
-	MPI_SUM, 0, MPI_COMM_WORLD);
+	MPI_SUM, 0, MPI_COMM_WORLD); // error?
 
 	if (mpi_data_.mpiRank_ == 0) {
 		for (int l = 0; l <= lambda_max_; l++) {
@@ -1752,7 +1767,7 @@ void MP_LAMP::PreProcessRootNode() {
 
 bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 		GetMinSupData* getminsup_data, GetTestableData* gettestable_data) {
-	if (node_stack_->Empty())
+	if (treesearch_data->node_stack_->Empty())
 		return false;
 	long long int start_time, lap_time;
 	start_time = timer_->Elapsed();
@@ -1786,7 +1801,7 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 			}
 		}
 
-		int core_i = g_->CoreIndex(*node_stack_, itemset_buf_);
+		int core_i = g_->CoreIndex(*treesearch_data->node_stack_, itemset_buf_);
 
 		int * ppc_ext_buf;
 		// todo: use database reduction
@@ -1823,8 +1838,8 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 						if (elt - lap_time >= FLAGS_probe_period * 1000000) {
 							log_.d_.process_node_time_ += elt - lap_time;
 
-							Probe(mpi_data);
-							Distribute(mpi_data);
+							Probe(mpi_data, treesearch_data);
+							Distribute(mpi_data, treesearch_data);
 							Reject(mpi_data);
 
 							lap_time = timer_->Elapsed();
@@ -1836,8 +1851,8 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 						log_.d_.process_node_time_ += timer_->Elapsed()
 								- lap_time;
 
-						Probe(mpi_data);
-						Distribute(mpi_data);
+						Probe(mpi_data, treesearch_data);
+						Distribute(mpi_data, treesearch_data);
 						Reject(mpi_data);
 
 						lap_time = timer_->Elapsed();
@@ -1907,12 +1922,12 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 				// therefore no need to check it's children
 				// note: skipping node_stack_ full check. allocate enough memory!
 				if (sup_num <= lambda_)
-					node_stack_->Pop();
+					treesearch_data->node_stack_->Pop();
 			}
 		}
 
-		if (CheckProcessNodeEnd(mpi_data_.granularity_,
-				mpi_data_.isGranularitySec_, processed, start_time))
+		if (CheckProcessNodeEnd(mpi_data.granularity_,
+				mpi_data.isGranularitySec_, processed, start_time))
 			break;
 	}
 
@@ -1925,7 +1940,7 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 					<< elapsed_time << std::endl
 			;);
 
-	mpi_data_.processing_node_ = false;
+	mpi_data.processing_node_ = false;
 	return true;
 }
 
@@ -2097,41 +2112,43 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 void MP_LAMP::SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline) {
 	assert(dst >= 0);
 	int message[2];
-	message[0] = dtd_.time_zone_;
+	message[0] = mpi_data.dtd_->time_zone_;
 	message[1] = is_lifeline; // -1 for random thieves, >=0 for lifeline thieves
 	assert(dst < mpi_data.nTotalProc_ && "SendRequest");
 
 	CallBsend(message, 2, MPI_INT, dst, Tag::REQUEST);
-	dtd_.OnSend();
+	mpi_data.dtd_->OnSend();
 
 	DBG(
 			D(2) << "SendRequest: dst=" << dst << "\tis_lifeline="
-					<< is_lifeline << "\tdtd_count=" << dtd_.count_ << std::endl
+					<< is_lifeline << "\tdtd_count=" << mpi_data.dtd_->count_
+					<< std::endl
 			;);
 }
 
-void MP_LAMP::RecvRequest(MPI_Data& mpi_data, int src) {
+void MP_LAMP::RecvRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+		int src) {
 	DBG(D(2) << "RecvRequest: src=" << src
 	;);
 	MPI_Status recv_status;
 	int message[2];
 
 	CallRecv(&message, 2, MPI_INT, src, Tag::REQUEST, &recv_status);
-	dtd_.OnRecv();
+	mpi_data.dtd_->OnRecv();
 	assert(src == recv_status.MPI_SOURCE);
 
 	int timezone = message[0];
-	dtd_.UpdateTimeZone(timezone);
+	mpi_data.dtd_->UpdateTimeZone(timezone);
 	int is_lifeline = message[1]; // -1 for random thieves, >=0 for lifeline thieves
 	int thief = src;
 	DBG(D(2, false) << "\tis_lifeline=" << is_lifeline
 	;);
 	DBG(D(2, false) << "\tthief=" << src
 	;);
-	DBG(D(2, false) << "\tdtd_count=" << dtd_.count_
+	DBG(D(2, false) << "\tdtd_count=" << mpi_data.dtd_->count_
 	;);
 
-	if (node_stack_->Empty()) {
+	if (treesearch_data->node_stack_->Empty()) {
 		DBG(D(2, false) << "\tempty and reject" << std::endl
 		;);
 		if (is_lifeline >= 0) {
@@ -2155,14 +2172,14 @@ void MP_LAMP::SendReject(MPI_Data& mpi_data, int dst) {
 	assert(dst >= 0);
 	int message[1];
 
-	message[0] = dtd_.time_zone_;
+	message[0] = mpi_data.dtd_->time_zone_;
 	assert(dst < mpi_data.nTotalProc_ && "SendReject");
 	CallBsend(message, 1, MPI_INT, dst, Tag::REJECT);
-	dtd_.OnSend();
+	mpi_data.dtd_->OnSend();
 
 	DBG(
-			D(2) << "SendReject: dst=" << dst << "\tdtd_count=" << dtd_.count_
-					<< std::endl
+			D(2) << "SendReject: dst=" << dst << "\tdtd_count="
+					<< mpi_data.dtd_->count_ << std::endl
 			;);
 }
 
@@ -2171,14 +2188,14 @@ void MP_LAMP::RecvReject(MPI_Data& mpi_data, int src) {
 	int message[1];
 
 	CallRecv(&message, 1, MPI_INT, src, Tag::REJECT, &recv_status);
-	dtd_.OnRecv();
+	mpi_data.dtd_->OnRecv();
 	assert(src == recv_status.MPI_SOURCE);
 
 	int timezone = message[0];
-	dtd_.UpdateTimeZone(timezone);
+	mpi_data.dtd_->UpdateTimeZone(timezone);
 	DBG(
-			D(2) << "RecvReject: src=" << src << "\tdtd_count=" << dtd_.count_
-					<< std::endl
+			D(2) << "RecvReject: src=" << src << "\tdtd_count="
+					<< mpi_data.dtd_->count_ << std::endl
 			;);
 
 	stealer_.ResetRequesting();
@@ -2188,7 +2205,7 @@ void MP_LAMP::RecvReject(MPI_Data& mpi_data, int src) {
 void MP_LAMP::SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
 		int dst, int is_lifeline) {
 	assert(dst >= 0);
-	st->SetTimestamp(dtd_.time_zone_);
+	st->SetTimestamp(mpi_data.dtd_->time_zone_);
 	st->SetFlag(is_lifeline);
 	int * message = st->Stack();
 	int size = st->UsedCapacity();
@@ -2200,18 +2217,19 @@ void MP_LAMP::SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
 
 	assert(dst < mpi_data.nTotalProc_ && "SendGive");
 	CallBsend(message, size, MPI_INT, dst, Tag::GIVE);
-	dtd_.OnSend();
+	mpi_data.dtd_->OnSend();
 
 	DBG(
-			D(2) << "SendGive: " << "\ttimezone=" << dtd_.time_zone_ << "\tdst="
-					<< dst << "\tlfl=" << is_lifeline << "\tsize=" << size
-					<< "\tnode=" << st->NuItemset() << "\tdtd_count="
-					<< dtd_.count_ << std::endl
+			D(2) << "SendGive: " << "\ttimezone=" << mpi_data.dtd_->time_zone_
+					<< "\tdst=" << dst << "\tlfl=" << is_lifeline << "\tsize="
+					<< size << "\tnode=" << st->NuItemset() << "\tdtd_count="
+					<< mpi_data.dtd_->count_ << std::endl
 			;);
 	//st->PrintAll(D(false));
 }
 
-void MP_LAMP::RecvGive(MPI_Data& mpi_data, int src, MPI_Status probe_status) {
+void MP_LAMP::RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+		int src, MPI_Status probe_status) {
 	int count;
 	int error = MPI_Get_count(&probe_status, MPI_INT, &count);
 	if (error != MPI_SUCCESS) {
@@ -2224,19 +2242,19 @@ void MP_LAMP::RecvGive(MPI_Data& mpi_data, int src, MPI_Status probe_status) {
 
 	CallRecv(give_stack_->Stack(), count, MPI_INT, src, Tag::GIVE,
 			&recv_status);
-	dtd_.OnRecv();
+	mpi_data.dtd_->OnRecv();
 	assert(src == recv_status.MPI_SOURCE);
 
 	int timezone = give_stack_->Timestamp();
-	dtd_.UpdateTimeZone(timezone);
+	mpi_data.dtd_->UpdateTimeZone(timezone);
 
 	int flag = give_stack_->Flag();
-	int orig_nu_itemset = node_stack_->NuItemset();
+	int orig_nu_itemset = treesearch_data->node_stack_->NuItemset();
 
-	node_stack_->MergeStack(
+	treesearch_data->node_stack_->MergeStack(
 			give_stack_->Stack() + VariableLengthItemsetStack::SENTINEL + 1,
 			count - VariableLengthItemsetStack::SENTINEL - 1);
-	int new_nu_itemset = node_stack_->NuItemset();
+	int new_nu_itemset = treesearch_data->node_stack_->NuItemset();
 
 	if (flag >= 0) {
 		mpi_data.lifelines_activated_[src] = false;
@@ -2248,20 +2266,21 @@ void MP_LAMP::RecvGive(MPI_Data& mpi_data, int src, MPI_Status probe_status) {
 	}
 
 	DBG(
-			D(2) << "RecvGive: src=" << src << "\ttimezone=" << dtd_.time_zone_
-					<< "\tlfl=" << flag << "\tsize=" << count << "\tnode="
+			D(2) << "RecvGive: src=" << src << "\ttimezone="
+					<< mpi_data.dtd_->time_zone_ << "\tlfl=" << flag
+					<< "\tsize=" << count << "\tnode="
 					<< (new_nu_itemset - orig_nu_itemset) << "\tdtd_count="
-					<< dtd_.count_ << std::endl
+					<< mpi_data.dtd_->count_ << std::endl
 			;);
 
 	give_stack_->Clear();
 
 	log_.d_.node_stack_max_itm_ = std::max(log_.d_.node_stack_max_itm_,
-			(long long int) (node_stack_->NuItemset()));
+			(long long int) (treesearch_data->node_stack_->NuItemset()));
 	log_.d_.node_stack_max_cap_ = std::max(log_.d_.node_stack_max_cap_,
-			(long long int) (node_stack_->UsedCapacity()));
+			(long long int) (treesearch_data->node_stack_->UsedCapacity()));
 
-	DBG(node_stack_->PrintAll(D(3, false))
+	DBG(treesearch_data->node_stack_->PrintAll(D(3, false))
 	;);
 
 	stealer_.ResetRequesting();
@@ -2274,7 +2293,7 @@ void MP_LAMP::RecvGive(MPI_Data& mpi_data, int src, MPI_Status probe_status) {
 void MP_LAMP::SendLambda(MPI_Data& mpi_data, int lambda) {
 	// send lambda to bcast_targets_
 	int message[2];
-	message[0] = dtd_.time_zone_;
+	message[0] = mpi_data.dtd_->time_zone_;
 	message[1] = lambda;
 
 	for (int i = 0; i < k_echo_tree_branch; i++) {
@@ -2284,12 +2303,12 @@ void MP_LAMP::SendLambda(MPI_Data& mpi_data, int lambda) {
 				mpi_data.bcast_targets_[i] < mpi_data.nTotalProc_
 						&& "SendLambda");
 		CallBsend(message, 2, MPI_INT, mpi_data.bcast_targets_[i], Tag::LAMBDA);
-		dtd_.OnSend();
+		mpi_data.dtd_->OnSend();
 
 		DBG(
 				D(2) << "SendLambda: dst=" << mpi_data.bcast_targets_[i]
 						<< "\tlambda=" << lambda << "\tdtd_count="
-						<< dtd_.count_ << std::endl
+						<< mpi_data.dtd_->count_ << std::endl
 				;);
 	}
 }
@@ -2299,14 +2318,14 @@ void MP_LAMP::RecvLambda(MPI_Data& mpi_data, int src) {
 	int message[2];
 
 	CallRecv(&message, 2, MPI_INT, src, Tag::LAMBDA, &recv_status);
-	dtd_.OnRecv();
+	mpi_data.dtd_->OnRecv();
 	assert(src == recv_status.MPI_SOURCE);
 	int timezone = message[0];
-	dtd_.UpdateTimeZone(timezone);
+	mpi_data.dtd_->UpdateTimeZone(timezone);
 
 	DBG(
 			D(2) << "RecvLambda: src=" << src << "\tlambda=" << message[1]
-					<< "\tdtd_count=" << dtd_.count_ << std::endl
+					<< "\tdtd_count=" << mpi_data.dtd_->count_ << std::endl
 			;);
 
 	int new_lambda = message[1];
@@ -2435,7 +2454,7 @@ void MP_LAMP::SendResultReply(MPI_Data& mpi_data) {
 	;);
 
 	mpi_data.echo_waiting_ = false;
-	dtd_.terminated_ = true;
+	mpi_data.dtd_->terminated_ = true;
 }
 
 void MP_LAMP::RecvResultReply(MPI_Data& mpi_data, int src,
@@ -2481,7 +2500,7 @@ void MP_LAMP::RecvResultReply(MPI_Data& mpi_data, int src,
 			SendResultReply(mpi_data);
 		} else { // root
 			mpi_data.echo_waiting_ = false;
-			dtd_.terminated_ = true;
+			mpi_data.dtd_->terminated_ = true;
 		}
 	}
 }
@@ -2527,7 +2546,7 @@ void MP_LAMP::SortSignificantSets() {
 
 //==============================================================================
 
-void MP_LAMP::Distribute(MPI_Data& mpi_data) {
+void MP_LAMP::Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data) {
 	if (mpi_data.nTotalProc_ == 1)
 		return;
 	DBG(D(3) << "Distribute" << std::endl
@@ -2718,45 +2737,51 @@ void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data,
 	phase_ = 1;
 	DBG(D(1) << "MainLoop" << std::endl
 	;);
-	while (!dtd_.terminated_) {
-		while (!dtd_.terminated_) {
+	while (!mpi_data.dtd_->terminated_) {
+		while (!mpi_data.dtd_->terminated_) {
 			if (ProcessNode(mpi_data, treesearch_data, getminsup_data,
 					(GetTestableData*) NULL)) {
-				log_.d_.node_stack_max_itm_ =
-						std::max(log_.d_.node_stack_max_itm_,
+				treesearch_data->log_->d_.node_stack_max_itm_ =
+						std::max(treesearch_data->log_->d_.node_stack_max_itm_,
 								(long long int) (treesearch_data->node_stack_->NuItemset()));
-				log_.d_.node_stack_max_cap_ =
-						std::max(log_.d_.node_stack_max_cap_,
+				treesearch_data->log_->d_.node_stack_max_cap_ =
+						std::max(treesearch_data->log_->d_.node_stack_max_cap_,
 								(long long int) (treesearch_data->node_stack_->UsedCapacity()));
-				Probe(mpi_data);
-				if (dtd_.terminated_)
+				Probe(mpi_data, treesearch_data);
+				if (mpi_data.dtd_->terminated_)
 					break;
-				Distribute(mpi_data);
+				Distribute(mpi_data, treesearch_data);
 				Reject(mpi_data); // distribute finished, reject remaining requests
 				if (mpi_data.mpiRank_ == 0)
 					CheckCSThreshold(mpi_data);
 			} else
 				break;
 		}
-		if (dtd_.terminated_)
+		if (mpi_data.dtd_->terminated_)
 			break;
 
-		log_.idle_start_ = timer_->Elapsed();
+		treesearch_data->log_->idle_start_ = treesearch_data->timer_->Elapsed();
 		Reject(mpi_data); // node_stack_ empty. reject requests
 		Steal(mpi_data); // request steal
-		if (dtd_.terminated_) {
-			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+		if (mpi_data.dtd_->terminated_) {
+			treesearch_data->log_->d_.idle_time_ +=
+					treesearch_data->timer_->Elapsed()
+							- treesearch_data->log_->idle_start_;
 			break;
 		}
 
-		Probe(mpi_data);
-		if (dtd_.terminated_) {
-			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+		Probe(mpi_data, treesearch_data);
+		if (mpi_data.dtd_->terminated_) {
+			treesearch_data->log_->d_.idle_time_ +=
+					treesearch_data->timer_->Elapsed()
+							- treesearch_data->log_->idle_start_;
 			break;
 		}
 		if (mpi_data.mpiRank_ == 0)
 			CheckCSThreshold(mpi_data);
-		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+		treesearch_data->log_->d_.idle_time_ +=
+				treesearch_data->timer_->Elapsed()
+						- treesearch_data->log_->idle_start_;
 	}
 
 }
@@ -2766,8 +2791,8 @@ void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data,
 	phase_ = 2;
 	DBG(D(1) << "MainLoop" << std::endl
 	;);
-	while (!dtd_.terminated_) {
-		while (!dtd_.terminated_) {
+	while (!mpi_data.dtd_->terminated_) {
+		while (!mpi_data.dtd_->terminated_) {
 			if (ProcessNode(mpi_data, treesearch_data, (GetMinSupData*) NULL,
 					gettestable_data)) {
 				log_.d_.node_stack_max_itm_ = std::max(
@@ -2776,27 +2801,27 @@ void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data,
 				log_.d_.node_stack_max_cap_ = std::max(
 						log_.d_.node_stack_max_cap_,
 						(long long int) (node_stack_->UsedCapacity()));
-				Probe(mpi_data);
-				if (dtd_.terminated_)
+				Probe(mpi_data, treesearch_data);
+				if (mpi_data.dtd_->terminated_)
 					break;
-				Distribute(mpi_data);
+				Distribute(mpi_data, treesearch_data);
 				Reject(mpi_data); // distribute finished, reject remaining requests
 			} else
 				break;
 		}
-		if (dtd_.terminated_)
+		if (mpi_data.dtd_->terminated_)
 			break;
 
 		log_.idle_start_ = timer_->Elapsed();
 		Reject(mpi_data); // node_stack_ empty. reject requests
 		Steal(mpi_data); // request steal
-		if (dtd_.terminated_) {
+		if (mpi_data.dtd_->terminated_) {
 			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 			break;
 		}
 
-		Probe(mpi_data);
-		if (dtd_.terminated_) {
+		Probe(mpi_data, treesearch_data);
+		if (mpi_data.dtd_->terminated_) {
 			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 			break;
 		}
@@ -2815,8 +2840,8 @@ void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data,
 	if (mpi_data.mpiRank_ == 0)
 		SendResultRequest(mpi_data);
 
-	while (!dtd_.terminated_)
-		Probe(mpi_data);
+	while (!mpi_data.dtd_->terminated_)
+		Probe(mpi_data, (TreeSearchData*) NULL);
 
 }
 

@@ -155,20 +155,21 @@ public:
 	std::ostream & PrintAggrPLog(std::ostream & out);
 
 	struct TreeSearchData {
-		TreeSearchData(VariableLengthItemsetStack * stack) :
-				node_stack_(stack) {
+		TreeSearchData(VariableLengthItemsetStack * stack,
+				Database<uint64> * d_, LampGraph<uint64> * g_,
+				VariableBitsetHelper<uint64> * bsh_, Log *log_, Timer * timer_) :
+				node_stack_(stack), d_(d_), g_(g_), bsh_(bsh_), log_(log_), timer_(
+						timer_) {
 		}
 		// Search fields
 		VariableLengthItemsetStack * node_stack_;
-
 		// Domain fields. TODO: Way to wacky to be dependent on these...
-//		Database<uint64> * d_;
-//		LampGraph<uint64> * g_;
-//		VariableBitsetHelper<uint64> * bsh_; // bitset helper
-//
-//		// Utils
-//		Log *log_;
-//		Timer * timer_;
+		Database<uint64> * d_;
+		LampGraph<uint64> * g_;
+		VariableBitsetHelper<uint64> * bsh_; // bitset helper
+		// Utils
+		Log *log_;
+		Timer * timer_;
 	};
 
 	struct GetMinSupData {
@@ -199,18 +200,29 @@ public:
 //		long long int * accum_recv_; // int array of [0...lambda_max_] (size lambda_max_+1)
 	};
 	struct GetTestableData {
-		GetTestableData(VariableLengthItemsetStack * freq_stack,
+		GetTestableData(int lambda_max_minus_one,
+				VariableLengthItemsetStack * freq_stack,
 				std::multimap<double, int *> freq_map, double sig_level) :
-				freq_stack_(freq_stack), freq_map_(freq_map), sig_level_(
-						sig_level) {
+				freqThreshold_(lambda_max_minus_one), freq_stack_(freq_stack), freq_map_(
+						freq_map), sig_level_(sig_level) {
 		}
+		int freqThreshold_;
 		// Retrun variables. Used for GetSignificantPatterns.
 		VariableLengthItemsetStack * freq_stack_; // record freq itemsets
 		std::multimap<double, int *> freq_map_; // record (pval, *itemsets)
 		double sig_level_;
 	};
 	struct GetSignificantData {
+		VariableLengthItemsetStack * freq_stack_; // record freq itemsets
+		std::multimap<double, int *> freq_map_; // record (pval, *itemsets)
 
+		// Domain variables
+		Database<uint64> * d_;
+		LampGraph<uint64> * g_;
+		VariableBitsetHelper<uint64> * bsh_; // bitset helper
+		// Utils
+		Log *log_;
+		Timer * timer_;
 	};
 
 private:
@@ -227,8 +239,8 @@ private:
 
 	static const int k_probe_period;
 
-	MPI_Data mpi_data_;
 	DTD dtd_;
+	MPI_Data mpi_data_;
 
 	// proc id of lifeline thieves
 	// bool * thieves_requests_;
@@ -236,9 +248,11 @@ private:
 
 	// LAMP variables
 
+//	{
 	Database<uint64> * d_;
 	LampGraph<uint64> * g_;
 	VariableBitsetHelper<uint64> * bsh_; // bitset helper
+//	}
 
 	Log log_;
 	Timer * timer_;
@@ -282,128 +296,145 @@ private:
 	// long long int * cs_accum_array_base_; // int array of -1..lambda_max_ (size lambda_max_+2)
 
 	// 0: count, 1: time warp, 2: empty flag, 3--: array
+	struct AccumArray {
+		AccumArray(long long int* dtd_pointer) :
+				dtd_accum_array_base_(dtd_pointer) {
+		}
+		long long int* getDTDAccumArrayBase() {
+			return dtd_accum_array_base_;
+		}
+		long long int* getAccumArray() {
+			return dtd_accum_array_base_ + 3;
+		}
+		long long int* dtd_accum_array_base_;
+	};
 	long long int * dtd_accum_array_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
-	// -3: count, -2: time warp, -1: empty flag, 0--: array
+// -3: count, -2: time warp, -1: empty flag, 0--: array
 	long long int * accum_array_; // int array of [0...lambda_max_] (size lambda_max_+1)
 
-	// 0: count, 1: time warp, 2: empty flag, 3--: array
+// 0: count, 1: time warp, 2: empty flag, 3--: array
 	long long int * dtd_accum_recv_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
-	// -3: count, -2: time warp, -1: empty flag, 0--: array
+// -3: count, -2: time warp, -1: empty flag, 0--: array
 	long long int * accum_recv_; // int array of [0...lambda_max_] (size lambda_max_+1)
 
 	VariableLengthItemsetStack * node_stack_;
-	// todo: prepare stack with no sup hist
-	// 0: time zone, 1: is_lifeline
+// todo: prepare stack with no sup hist
+// 0: time zone, 1: is_lifeline
 	VariableLengthItemsetStack * give_stack_;
 
-	// periodic closed set count reduce.
-	void Probe(MPI_Data& mpi_data);
+// periodic closed set count reduce.
+	void Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
 
-	// void ProbeAccumTask();
-	// void ProbeBasicTask();
-	// void ProbeControlTask();
+// void ProbeAccumTask();
+// void ProbeBasicTask();
+// void ProbeControlTask();
 
-	// first, send to random thief and then to lifeline theives
-	// random thief has higher priority
-	void Distribute(MPI_Data& mpi_data);
+// first, send to random thief and then to lifeline theives
+// random thief has higher priority
+	void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
 
-	void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int steal_num);
+	void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
+			int steal_num);
 
 	void Deal(MPI_Data& mpi_data);
 
-	// send reject to remaining requests
+// send reject to remaining requests
 	void Reject(MPI_Data& mpi_data);
 
-	// set this in steal, reset this in RecvGive and RecvReject
-	// small difference from x10 implementation
+// set this in steal, reset this in RecvGive and RecvReject
+// small difference from x10 implementation
 	bool waiting_;
 
-	// send steal requests
-	// two phase, 1, random, 2, lifeline
-	// if succeeds, break
-	// note: original x10 GLB implementation always probes from i=0..z, is this OK?
-	// how about prepare int steal_id_; and do steal_id_++/ steal_id_ %= z ?
-	// note:
-	// don't send multiple requests at once
+// send steal requests
+// two phase, 1, random, 2, lifeline
+// if succeeds, break
+// note: original x10 GLB implementation always probes from i=0..z, is this OK?
+// how about prepare int steal_id_; and do steal_id_++/ steal_id_ %= z ?
+// note:
+// don't send multiple requests at once
 	void Steal(MPI_Data& mpi_data);
-	// Steal needs change from x10 because of "bool waiting"
-	// Steal sends one request each time it is called
-	// there should be steal_state and counters c_r and c_l (random and lifeline)
-	// c_r=0, c_l=0
-	// 0, if (state == RANDOM && w > 0) goto 1, else goto 4
-	// 1, send random request, c_r++
-	// 2, wait for reject or give
-	// 3, if c_r >= w, c_r = 0, set state LIFELINE and return
-	//
-	// 4, send lifeline request, c_l++
-	// 5, wait for reject or give
-	// 6, if c_l >= z, c_l = 0, set state RANDOM and return
+// Steal needs change from x10 because of "bool waiting"
+// Steal sends one request each time it is called
+// there should be steal_state and counters c_r and c_l (random and lifeline)
+// c_r=0, c_l=0
+// 0, if (state == RANDOM && w > 0) goto 1, else goto 4
+// 1, send random request, c_r++
+// 2, wait for reject or give
+// 3, if c_r >= w, c_r = 0, set state LIFELINE and return
+//
+// 4, send lifeline request, c_l++
+// 5, wait for reject or give
+// 6, if c_l >= z, c_l = 0, set state RANDOM and return
 
-	// steal with probe
+// steal with probe
 //	void Steal2();
 
-	// will be false if w random steal and all lifeline steal finished
-	// will be true if RecvGive
+// will be false if w random steal and all lifeline steal finished
+// will be true if RecvGive
 	StealState stealer_;
 
-	//--------
-	// control
+//--------
+// control
 
-	// 0: count, 1: time warp flag, 2: empty flag
+// 0: count, 1: time warp flag, 2: empty flag
 	void SendDTDRequest(MPI_Data& mpi_data);
-	void RecvDTDRequest(MPI_Data& mpi_data,int src);
+	void RecvDTDRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+			int src);
 
 	bool DTDReplyReady(MPI_Data& mpi_data) const;
 	void DTDCheck(MPI_Data& mpi_data);
 
-	// 0: count, 1: time warp flag, 2: empty flag
-	void SendDTDReply(MPI_Data& mpi_data);
-	void RecvDTDReply(MPI_Data& mpi_data, int src);
+// 0: count, 1: time warp flag, 2: empty flag
+	void SendDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
+	void RecvDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+			int src);
 
 	bool DTDAccumReady(MPI_Data& mpi_data) const;
 
-	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendDTDAccumRequest(MPI_Data& mpi_data);
 	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
 
-	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendDTDAccumReply(MPI_Data& mpi_data);
-	void RecvDTDAccumReply(MPI_Data& mpi_data,
-			int src);
+	void RecvDTDAccumReply(MPI_Data& mpi_data, int src);
 
 	void SendBcastFinish(MPI_Data& mpi_data);
 	void RecvBcastFinish(MPI_Data& mpi_data, int src);
 
-	//--------
+//--------
 
 	int phase_; // 1, 2, 3
 
-	//--------
-	// basic
+//--------
+// basic
 
-	// send recv functions
+// send recv functions
 	void SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline); // for random thieves, is_lifeline = -1
-	void RecvRequest(MPI_Data& mpi_data, int src);
+	void RecvRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+			int src);
 
-	// 0: time zone, 1: is_lifeline
+// 0: time zone, 1: is_lifeline
 	void SendReject(MPI_Data& mpi_data, int dst);
 	void RecvReject(MPI_Data& mpi_data, int src);
 
-	// 1: time zone
-	void SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int dst, int is_lifeline);
+// 1: time zone
+	void SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int dst,
+			int is_lifeline);
 
-	// sets lifelines_activated_ = false
-	// lifelines_activated_ becomes false only in this case (reject does NOT)
-	void RecvGive(MPI_Data& mpi_data, int src, MPI_Status status);
+// sets lifelines_activated_ = false
+// lifelines_activated_ becomes false only in this case (reject does NOT)
+	void RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data, int src,
+			MPI_Status status);
 
 	void SendLambda(MPI_Data& mpi_data, int lambda);
 	void RecvLambda(MPI_Data& mpi_data, int src);
 
-	// 0: time zone
-	// search for depth 1 and get initial lambda
+// 0: time zone
+// search for depth 1 and get initial lambda
 	void PreProcessRootNode();
 
-	// provide int n and bool n_is_ms_ (if n_is_ms_==false, it shows number of nodes)
+// provide int n and bool n_is_ms_ (if n_is_ms_==false, it shows number of nodes)
 	bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data,
 			GetMinSupData* getminsup_data_, GetTestableData* gettestable_data);
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
@@ -428,43 +459,43 @@ private:
 
 	std::set<SignificantSetResult, sigset_compare> significant_set_;
 
-	// add pos_sup_num info in significant map
-	// add stable sort
-	// std::multimap< double, int * > significant_map_;
+// add pos_sup_num info in significant map
+// add stable sort
+// std::multimap< double, int * > significant_map_;
 
 	long long int total_expand_num_;
 	long long int expand_num_;
 	long long int closed_set_num_;
 
-	//--------
-	// third phase
+//--------
+// third phase
 
-	// void ProbeThirdPhaseTask();
+// void ProbeThirdPhaseTask();
 
 	bool AccumCountReady(MPI_Data& mpi_data) const;
 
 	void SendResultRequest(MPI_Data& mpi_data);
-	void RecvResultRequest(MPI_Data& mpi_data,int src);
+	void RecvResultRequest(MPI_Data& mpi_data, int src);
 
 	void SendResultReply(MPI_Data& mpi_data);
-	void RecvResultReply(MPI_Data& mpi_data,int src, MPI_Status status);
+	void RecvResultReply(MPI_Data& mpi_data, int src, MPI_Status status);
 
 	void ExtractSignificantSet();
 
-	// insert pointer into significant_map_ (do not sort the stack itself)
+// insert pointer into significant_map_ (do not sort the stack itself)
 	void SortSignificantSets();
 
-	//--------
-	// for printing results
+//--------
+// for printing results
 
 	long long int final_closed_set_num_;
 	int final_support_;
 	double final_sig_level_;
 
-	// true if bcast_targets_ are all -1
+// true if bcast_targets_ are all -1
 	bool IsLeaf(MPI_Data& mpi_data) const;
 
-	// return flag. if (flag), it is ready to receive
+// return flag. if (flag), it is ready to receive
 	int CallIprobe(MPI_Status * status, int * count, int * src);
 
 	int CallRecv(void * buffer, int count, MPI_Datatype type, int src, int tag,
@@ -473,10 +504,10 @@ private:
 			int tag);
 
 	int CallBcast(void * buffer, int data_count, MPI_Datatype type);
-	// todo: implement call reduce, call gather
+// todo: implement call reduce, call gather
 
-	//--------
-	// for debug
+//--------
+// for debug
 
 	void SetLogFileName();
 
@@ -489,11 +520,11 @@ private:
 	static std::ofstream null_stream_;
 	std::ostream& D(int level, bool show_phase = true);
 
-	// static std::stringstream alert_ss;
-	// std::ostream& Alert();
+// static std::stringstream alert_ss;
+// std::ostream& Alert();
 
-	//--------
-	// testing [2015-10-01 13:54]
+//--------
+// testing [2015-10-01 13:54]
 	bool last_bcast_was_dtd_;
 
 };
