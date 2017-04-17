@@ -767,8 +767,7 @@ void MP_LAMP::SendDTDReply(MPI_Data& mpi_data,
 	int message[3];
 	// using reduced vars
 	message[0] = mpi_data.dtd_->count_ + mpi_data.dtd_->reduce_count_;
-	bool tw_flag = mpi_data.dtd_->time_warp_
-			|| mpi_data.dtd_->reduce_time_warp_;
+	bool tw_flag = mpi_data.dtd_->time_warp_ || mpi_data.dtd_->reduce_time_warp_;
 	message[1] = (tw_flag ? 1 : 0);
 	// for Steal
 	mpi_data.dtd_->not_empty_ = !(treesearch_data->node_stack_->Empty())
@@ -778,8 +777,7 @@ void MP_LAMP::SendDTDReply(MPI_Data& mpi_data,
 	// dtd_.not_empty_ =
 	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
 	//     waiting_ || mpi_data.processing_node_;
-	bool em_flag = mpi_data.dtd_->not_empty_
-			|| mpi_data.dtd_->reduce_not_empty_;
+	bool em_flag = mpi_data.dtd_->not_empty_ || mpi_data.dtd_->reduce_not_empty_;
 	message[2] = (em_flag ? 1 : 0);
 	DBG(
 			D(3) << "SendDTDReply: dst = " << mpi_data.bcast_source_
@@ -878,8 +876,7 @@ void MP_LAMP::RecvDTDAccumRequest(MPI_Data& mpi_data, int src) {
 void MP_LAMP::SendDTDAccumReply(MPI_Data& mpi_data) {
 	dtd_accum_array_base_[0] = mpi_data.dtd_->count_
 			+ mpi_data.dtd_->reduce_count_;
-	bool tw_flag = mpi_data.dtd_->time_warp_
-			|| mpi_data.dtd_->reduce_time_warp_;
+	bool tw_flag = mpi_data.dtd_->time_warp_ || mpi_data.dtd_->reduce_time_warp_;
 	dtd_accum_array_base_[1] = (tw_flag ? 1 : 0);
 	// for Steal
 	mpi_data.dtd_->not_empty_ = !(node_stack_->Empty())
@@ -889,8 +886,7 @@ void MP_LAMP::SendDTDAccumReply(MPI_Data& mpi_data) {
 	// mpi_data.dtd_->not_empty_ =
 	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
 	//     waiting_ || mpi_data.processing_node_;
-	bool em_flag = mpi_data.dtd_->not_empty_
-			|| mpi_data.dtd_->reduce_not_empty_;
+	bool em_flag = mpi_data.dtd_->not_empty_ || mpi_data.dtd_->reduce_not_empty_;
 	dtd_accum_array_base_[2] = (em_flag ? 1 : 0);
 
 	DBG(
@@ -1944,170 +1940,6 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 	return true;
 }
 
-//bool MP_LAMP::ProcessNodeStraw1(int n) {
-//	if (node_stack_->Empty())
-//		return false;
-//	long long int start_time, lap_time;
-//	start_time = timer_->Elapsed();
-//	lap_time = start_time;
-//
-//	int processed = 0;
-//	mpi_data_.processing_node_ = true;
-//	while (!node_stack_->Empty()) {
-//		processed++;
-//		expand_num_++;
-//
-//		node_stack_->CopyItem(node_stack_->Top(), itemset_buf_);
-//		node_stack_->Pop();
-//
-//		// dbg
-//		DBG(D(3) << "expanded "
-//		;);
-//		DBG(node_stack_->Print(D(3), itemset_buf_)
-//		;);
-//
-//		// calculate support from itemset_buf_
-//		bsh_->Set(sup_buf_);
-//		{
-//			int n = node_stack_->GetItemNum(itemset_buf_);
-//			for (int i = 0; i < n; i++) {
-//				int item = node_stack_->GetNthItem(itemset_buf_, i);
-//				bsh_->And(d_->NthData(item), sup_buf_);
-//			}
-//		}
-//
-//		int core_i = g_->CoreIndex(*node_stack_, itemset_buf_);
-//
-//		int * ppc_ext_buf;
-//		// todo: use database reduction
-//
-//		assert(phase_ != 1 || node_stack_->GetItemNum(itemset_buf_) != 0);
-//
-//		bool is_root_node = (node_stack_->GetItemNum(itemset_buf_) == 0);
-//
-//		int accum_period_counter_ = 0;
-//		// reverse order
-//		// for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
-//		for (int new_item = d_->NextItemInReverseLoop(is_root_node,
-//				mpi_data_.mpiRank_, mpi_data_.nTotalProc_, d_->NuItems());
-//				new_item >= core_i + 1;
-//				new_item = d_->NextItemInReverseLoop(is_root_node,
-//						mpi_data_.mpiRank_, mpi_data_.nTotalProc_, new_item)) {
-//			// skip existing item
-//			// todo: improve speed here
-//			if (node_stack_->Exist(itemset_buf_, new_item))
-//				continue;
-//
-//			{      // Periodic probe. (do in both phases)
-//				accum_period_counter_++;
-//				if (FLAGS_probe_period_is_ms) {      // using milli second
-//					if (accum_period_counter_ >= 64) {
-//						// to avoid calling timer_ frequently, time is checked once in 64 loops
-//						// clock_gettime takes 0.3--0.5 micro sec
-//						accum_period_counter_ = 0;
-//						long long int elt = timer_->Elapsed();
-//						if (elt - lap_time >= FLAGS_probe_period * 1000000) {
-//							log_.d_.process_node_time_ += elt - lap_time;
-//
-//							Probe();
-//
-//							lap_time = timer_->Elapsed();
-//						}
-//					}
-//				} else {            // not using milli second
-//					if (accum_period_counter_ >= FLAGS_probe_period) {
-//						accum_period_counter_ = 0;
-//						log_.d_.process_node_time_ += timer_->Elapsed()
-//								- lap_time;
-//
-//						Probe();
-//
-//						lap_time = timer_->Elapsed();
-//					}
-//				}
-//				// note: do this before PushPre is called [2015-10-05 21:56]
-//
-//				// todo: if database reduction is implemented,
-//				//       do something here for changed lambda_ (skipping new_item value ?)
-//			}
-//
-//			bsh_->Copy(sup_buf_, child_sup_buf_);
-//			int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
-//					child_sup_buf_);
-//
-//			if (sup_num < lambda_)
-//				continue;
-//
-//			node_stack_->PushPre();
-//			ppc_ext_buf = node_stack_->Top();
-//
-//			bool res = g_->PPCExtension(node_stack_, itemset_buf_,
-//					child_sup_buf_, core_i, new_item, ppc_ext_buf);
-//
-//			node_stack_->SetSup(ppc_ext_buf, sup_num);
-//			node_stack_->PushPostNoSort();
-//
-//			if (!res) {        // todo: remove this redundancy
-//				node_stack_->Pop();
-//			} else {
-//				node_stack_->SortTop();
-//
-//				DBG(if (phase_ == 2) {
-//					D(3) << "found cs "
-//					;
-//					node_stack_->Print(D(3), ppc_ext_buf)
-//					;
-//				});
-//
-//				if (phase_ == 1)
-//					IncCsAccum(sup_num); // increment closed_set_num_array
-//				if (phase_ == 2)
-//					closed_set_num_++;
-//
-//				if (phase_ == 2 && FLAGS_third_phase) {
-//					int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
-//							child_sup_buf_);
-//					double pval = d_->PVal(sup_num, pos_sup_num);
-//					assert(pval >= 0.0);
-//					if (pval <= sig_level_) { // permits == case?
-//						freq_stack_->PushPre();
-//						int * item = freq_stack_->Top();
-//						freq_stack_->CopyItem(ppc_ext_buf, item);
-//						freq_stack_->PushPostNoSort();
-//
-//						freq_map_.insert(std::pair<double, int*>(pval, item));
-//					}
-//				}
-//
-//				assert(sup_num >= lambda_);
-//
-//				// try skipping if supnum_ == sup_threshold,
-//				// because if sup_num of a node equals to sup_threshold, children will have smaller sup_num
-//				// therefore no need to check it's children
-//				// note: skipping node_stack_ full check. allocate enough memory!
-//				if (sup_num <= lambda_)
-//					node_stack_->Pop();
-//			}
-//		}
-//
-//		if (CheckProcessNodeEnd(n, mpi_data_.isGranularitySec_, processed,
-//				start_time))
-//			break;
-//	}
-//
-//	long long int elapsed_time = timer_->Elapsed() - lap_time;
-//	log_.d_.process_node_time_ += elapsed_time;
-//	log_.d_.process_node_num_ += processed;
-//
-//	DBG(
-//			D(2) << "processed node num=" << processed << "\ttime="
-//					<< elapsed_time << std::endl
-//			;);
-//
-//	mpi_data_.processing_node_ = false;
-//	return true;
-//}
-
 // lifeline == -1 for random thieves
 void MP_LAMP::SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline) {
 	assert(dst >= 0);
@@ -2267,10 +2099,9 @@ void MP_LAMP::RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 
 	DBG(
 			D(2) << "RecvGive: src=" << src << "\ttimezone="
-					<< mpi_data.dtd_->time_zone_ << "\tlfl=" << flag
-					<< "\tsize=" << count << "\tnode="
-					<< (new_nu_itemset - orig_nu_itemset) << "\tdtd_count="
-					<< mpi_data.dtd_->count_ << std::endl
+					<< mpi_data.dtd_->time_zone_ << "\tlfl=" << flag << "\tsize="
+					<< count << "\tnode=" << (new_nu_itemset - orig_nu_itemset)
+					<< "\tdtd_count=" << mpi_data.dtd_->count_ << std::endl
 			;);
 
 	give_stack_->Clear();
@@ -2741,11 +2572,11 @@ void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data,
 		while (!mpi_data.dtd_->terminated_) {
 			if (ProcessNode(mpi_data, treesearch_data, getminsup_data,
 					(GetTestableData*) NULL)) {
-				treesearch_data->log_->d_.node_stack_max_itm_ =
-						std::max(treesearch_data->log_->d_.node_stack_max_itm_,
+				log_.d_.node_stack_max_itm_ =
+						std::max(log_.d_.node_stack_max_itm_,
 								(long long int) (treesearch_data->node_stack_->NuItemset()));
-				treesearch_data->log_->d_.node_stack_max_cap_ =
-						std::max(treesearch_data->log_->d_.node_stack_max_cap_,
+				log_.d_.node_stack_max_cap_ =
+						std::max(log_.d_.node_stack_max_cap_,
 								(long long int) (treesearch_data->node_stack_->UsedCapacity()));
 				Probe(mpi_data, treesearch_data);
 				if (mpi_data.dtd_->terminated_)
@@ -2760,28 +2591,22 @@ void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data,
 		if (mpi_data.dtd_->terminated_)
 			break;
 
-		treesearch_data->log_->idle_start_ = treesearch_data->timer_->Elapsed();
+		log_.idle_start_ = timer_->Elapsed();
 		Reject(mpi_data); // node_stack_ empty. reject requests
 		Steal(mpi_data); // request steal
 		if (mpi_data.dtd_->terminated_) {
-			treesearch_data->log_->d_.idle_time_ +=
-					treesearch_data->timer_->Elapsed()
-							- treesearch_data->log_->idle_start_;
+			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 			break;
 		}
 
 		Probe(mpi_data, treesearch_data);
 		if (mpi_data.dtd_->terminated_) {
-			treesearch_data->log_->d_.idle_time_ +=
-					treesearch_data->timer_->Elapsed()
-							- treesearch_data->log_->idle_start_;
+			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 			break;
 		}
 		if (mpi_data.mpiRank_ == 0)
 			CheckCSThreshold(mpi_data);
-		treesearch_data->log_->d_.idle_time_ +=
-				treesearch_data->timer_->Elapsed()
-						- treesearch_data->log_->idle_start_;
+		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 	}
 
 }
@@ -3641,6 +3466,171 @@ std::ostream& operator<<(std::ostream & out, const FixedSizeStack & st) {
 	out << s.str() << std::flush;
 	return out;
 }
+
+//bool MP_LAMP::ProcessNodeStraw1(int n) {
+//	if (node_stack_->Empty())
+//		return false;
+//	long long int start_time, lap_time;
+//	start_time = timer_->Elapsed();
+//	lap_time = start_time;
+//
+//	int processed = 0;
+//	mpi_data_.processing_node_ = true;
+//	while (!node_stack_->Empty()) {
+//		processed++;
+//		expand_num_++;
+//
+//		node_stack_->CopyItem(node_stack_->Top(), itemset_buf_);
+//		node_stack_->Pop();
+//
+//		// dbg
+//		DBG(D(3) << "expanded "
+//		;);
+//		DBG(node_stack_->Print(D(3), itemset_buf_)
+//		;);
+//
+//		// calculate support from itemset_buf_
+//		bsh_->Set(sup_buf_);
+//		{
+//			int n = node_stack_->GetItemNum(itemset_buf_);
+//			for (int i = 0; i < n; i++) {
+//				int item = node_stack_->GetNthItem(itemset_buf_, i);
+//				bsh_->And(d_->NthData(item), sup_buf_);
+//			}
+//		}
+//
+//		int core_i = g_->CoreIndex(*node_stack_, itemset_buf_);
+//
+//		int * ppc_ext_buf;
+//		// todo: use database reduction
+//
+//		assert(phase_ != 1 || node_stack_->GetItemNum(itemset_buf_) != 0);
+//
+//		bool is_root_node = (node_stack_->GetItemNum(itemset_buf_) == 0);
+//
+//		int accum_period_counter_ = 0;
+//		// reverse order
+//		// for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
+//		for (int new_item = d_->NextItemInReverseLoop(is_root_node,
+//				mpi_data_.mpiRank_, mpi_data_.nTotalProc_, d_->NuItems());
+//				new_item >= core_i + 1;
+//				new_item = d_->NextItemInReverseLoop(is_root_node,
+//						mpi_data_.mpiRank_, mpi_data_.nTotalProc_, new_item)) {
+//			// skip existing item
+//			// todo: improve speed here
+//			if (node_stack_->Exist(itemset_buf_, new_item))
+//				continue;
+//
+//			{      // Periodic probe. (do in both phases)
+//				accum_period_counter_++;
+//				if (FLAGS_probe_period_is_ms) {      // using milli second
+//					if (accum_period_counter_ >= 64) {
+//						// to avoid calling timer_ frequently, time is checked once in 64 loops
+//						// clock_gettime takes 0.3--0.5 micro sec
+//						accum_period_counter_ = 0;
+//						long long int elt = timer_->Elapsed();
+//						if (elt - lap_time >= FLAGS_probe_period * 1000000) {
+//							log_.d_.process_node_time_ += elt - lap_time;
+//
+//							Probe();
+//
+//							lap_time = timer_->Elapsed();
+//						}
+//					}
+//				} else {            // not using milli second
+//					if (accum_period_counter_ >= FLAGS_probe_period) {
+//						accum_period_counter_ = 0;
+//						log_.d_.process_node_time_ += timer_->Elapsed()
+//								- lap_time;
+//
+//						Probe();
+//
+//						lap_time = timer_->Elapsed();
+//					}
+//				}
+//				// note: do this before PushPre is called [2015-10-05 21:56]
+//
+//				// todo: if database reduction is implemented,
+//				//       do something here for changed lambda_ (skipping new_item value ?)
+//			}
+//
+//			bsh_->Copy(sup_buf_, child_sup_buf_);
+//			int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
+//					child_sup_buf_);
+//
+//			if (sup_num < lambda_)
+//				continue;
+//
+//			node_stack_->PushPre();
+//			ppc_ext_buf = node_stack_->Top();
+//
+//			bool res = g_->PPCExtension(node_stack_, itemset_buf_,
+//					child_sup_buf_, core_i, new_item, ppc_ext_buf);
+//
+//			node_stack_->SetSup(ppc_ext_buf, sup_num);
+//			node_stack_->PushPostNoSort();
+//
+//			if (!res) {        // todo: remove this redundancy
+//				node_stack_->Pop();
+//			} else {
+//				node_stack_->SortTop();
+//
+//				DBG(if (phase_ == 2) {
+//					D(3) << "found cs "
+//					;
+//					node_stack_->Print(D(3), ppc_ext_buf)
+//					;
+//				});
+//
+//				if (phase_ == 1)
+//					IncCsAccum(sup_num); // increment closed_set_num_array
+//				if (phase_ == 2)
+//					closed_set_num_++;
+//
+//				if (phase_ == 2 && FLAGS_third_phase) {
+//					int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
+//							child_sup_buf_);
+//					double pval = d_->PVal(sup_num, pos_sup_num);
+//					assert(pval >= 0.0);
+//					if (pval <= sig_level_) { // permits == case?
+//						freq_stack_->PushPre();
+//						int * item = freq_stack_->Top();
+//						freq_stack_->CopyItem(ppc_ext_buf, item);
+//						freq_stack_->PushPostNoSort();
+//
+//						freq_map_.insert(std::pair<double, int*>(pval, item));
+//					}
+//				}
+//
+//				assert(sup_num >= lambda_);
+//
+//				// try skipping if supnum_ == sup_threshold,
+//				// because if sup_num of a node equals to sup_threshold, children will have smaller sup_num
+//				// therefore no need to check it's children
+//				// note: skipping node_stack_ full check. allocate enough memory!
+//				if (sup_num <= lambda_)
+//					node_stack_->Pop();
+//			}
+//		}
+//
+//		if (CheckProcessNodeEnd(n, mpi_data_.isGranularitySec_, processed,
+//				start_time))
+//			break;
+//	}
+//
+//	long long int elapsed_time = timer_->Elapsed() - lap_time;
+//	log_.d_.process_node_time_ += elapsed_time;
+//	log_.d_.process_node_num_ += processed;
+//
+//	DBG(
+//			D(2) << "processed node num=" << processed << "\ttime="
+//					<< elapsed_time << std::endl
+//			;);
+//
+//	mpi_data_.processing_node_ = false;
+//	return true;
+//}
+
 
 } // namespace lamp_search
 

@@ -154,76 +154,7 @@ public:
 	std::ostream & PrintPLog(std::ostream & out);
 	std::ostream & PrintAggrPLog(std::ostream & out);
 
-	struct TreeSearchData {
-		TreeSearchData(VariableLengthItemsetStack * stack,
-				Database<uint64> * d_, LampGraph<uint64> * g_,
-				VariableBitsetHelper<uint64> * bsh_, Log *log_, Timer * timer_) :
-				node_stack_(stack), d_(d_), g_(g_), bsh_(bsh_), log_(log_), timer_(
-						timer_) {
-		}
-		// Search fields
-		VariableLengthItemsetStack * node_stack_;
-		// Domain fields. TODO: Way to wacky to be dependent on these...
-		Database<uint64> * d_;
-		LampGraph<uint64> * g_;
-		VariableBitsetHelper<uint64> * bsh_; // bitset helper
-		// Utils
-		Log *log_;
-		Timer * timer_;
-	};
 
-	struct GetMinSupData {
-		GetMinSupData(int lambda_max, int lambda, long long int* cs_thr
-//				,
-//				long long int * dtd_accum_array_base,
-//				long long int * accum_array,
-//				long long int * dtd_accum_recv_base, long long int * accum_recv
-				) :
-				lambda_max_(lambda_max), lambda_(lambda), cs_thr_(cs_thr)
-//		, dtd_accum_array_base_(
-//						dtd_accum_array_base), accum_array_(accum_array), dtd_accum_recv_base_(
-//						dtd_accum_recv_base), accum_recv_(accum_recv)
-		{
-		}
-		;
-		int lambda_max_;
-		int lambda_;
-		long long int * cs_thr_;
-//		// 0: count, 1: time warp, 2: empty flag, 3--: array
-//		long long int * dtd_accum_array_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
-//		// -3: count, -2: time warp, -1: empty flag, 0--: array
-//		long long int * accum_array_; // int array of [0...lambda_max_] (size lambda_max_+1)
-//
-//		// 0: count, 1: time warp, 2: empty flag, 3--: array
-//		long long int * dtd_accum_recv_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
-//		// -3: count, -2: time warp, -1: empty flag, 0--: array
-//		long long int * accum_recv_; // int array of [0...lambda_max_] (size lambda_max_+1)
-	};
-	struct GetTestableData {
-		GetTestableData(int lambda_max_minus_one,
-				VariableLengthItemsetStack * freq_stack,
-				std::multimap<double, int *> freq_map, double sig_level) :
-				freqThreshold_(lambda_max_minus_one), freq_stack_(freq_stack), freq_map_(
-						freq_map), sig_level_(sig_level) {
-		}
-		int freqThreshold_;
-		// Retrun variables. Used for GetSignificantPatterns.
-		VariableLengthItemsetStack * freq_stack_; // record freq itemsets
-		std::multimap<double, int *> freq_map_; // record (pval, *itemsets)
-		double sig_level_;
-	};
-	struct GetSignificantData {
-		VariableLengthItemsetStack * freq_stack_; // record freq itemsets
-		std::multimap<double, int *> freq_map_; // record (pval, *itemsets)
-
-		// Domain variables
-		Database<uint64> * d_;
-		LampGraph<uint64> * g_;
-		VariableBitsetHelper<uint64> * bsh_; // bitset helper
-		// Utils
-		Log *log_;
-		Timer * timer_;
-	};
 
 private:
 	void GetMinimalSupport(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
