@@ -159,7 +159,7 @@ private:
 	 */
 	void ExtractSignificantSet();
 // insert pointer into significant_map_ (do not sort the stack itself)
-	void SortSignificantSets();
+//	void SortSignificantSets();
 
 	/**
 	 * Utils

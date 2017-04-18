@@ -1495,32 +1495,32 @@ void ParallelPatternMining::ExtractSignificantSet() {
 	}
 }
 
-void ParallelPatternMining::SortSignificantSets() {
-	int * set = getsignificant_data->significant_stack_->FirstItemset();
-
-	while (set != NULL) {
-		// calculate support from set
-		bsh_->Set(treesearch_data->sup_buf_);
-		{
-			int n = getsignificant_data->significant_stack_->GetItemNum(set);
-			for (int i = 0; i < n; i++) {
-				int item = getsignificant_data->significant_stack_->GetNthItem(
-						set, i);
-				bsh_->And(d_->NthData(item), treesearch_data->sup_buf_);
-			}
-		}
-
-		int sup_num = bsh_->Count(treesearch_data->sup_buf_);
-		int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
-				treesearch_data->sup_buf_);
-		double pval = d_->PVal(sup_num, pos_sup_num);
-
-		getsignificant_data->significant_set_->insert(
-				SignificantSetResult(pval, set, sup_num, pos_sup_num,
-						getsignificant_data->significant_stack_));
-		set = getsignificant_data->significant_stack_->NextItemset(set);
-	}
-}
+//void ParallelPatternMining::SortSignificantSets() {
+//	int * set = getsignificant_data->significant_stack_->FirstItemset();
+//
+//	while (set != NULL) {
+//		// calculate support from set
+//		bsh_->Set(treesearch_data->sup_buf_);
+//		{
+//			int n = getsignificant_data->significant_stack_->GetItemNum(set);
+//			for (int i = 0; i < n; i++) {
+//				int item = getsignificant_data->significant_stack_->GetNthItem(
+//						set, i);
+//				bsh_->And(d_->NthData(item), treesearch_data->sup_buf_);
+//			}
+//		}
+//
+//		int sup_num = bsh_->Count(treesearch_data->sup_buf_);
+//		int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
+//				treesearch_data->sup_buf_);
+//		double pval = d_->PVal(sup_num, pos_sup_num);
+//
+//		getsignificant_data->significant_set_->insert(
+//				SignificantSetResult(pval, set, sup_num, pos_sup_num,
+//						getsignificant_data->significant_stack_));
+//		set = getsignificant_data->significant_stack_->NextItemset(set);
+//	}
+//}
 
 void ParallelPatternMining::CheckInit() {
 	assert(mpi_data.echo_waiting_ == false);

@@ -1199,10 +1199,9 @@ void MP_LAMP::Search() {
 	}
 
 	double int_sig_lev = 0.0;
-	if (mpi_data_.mpiRank_ == 0)
+	if (mpi_data_.mpiRank_ == 0) {
 		int_sig_lev = GetInterimSigLevel(lambda_);
-	CallBcast(&int_sig_lev, 1, MPI_DOUBLE);
-
+	}
 	// todo: reduce expand_num_
 
 	{
@@ -1226,6 +1225,7 @@ void MP_LAMP::Search() {
 								/ GIGA << std::endl
 				;);
 
+		CallBcast(&int_sig_lev, 1, MPI_DOUBLE);
 		sig_level_ = int_sig_lev;
 		gettestable_data_ = new GetTestableData(lambda_, freq_stack_,
 				&freq_map_, sig_level_);
@@ -2242,157 +2242,6 @@ void MP_LAMP::Steal(MPI_Data& mpi_data) {
 	}
 }
 
-//void MP_LAMP::Steal2() {
-//	DBG(D(3) << "Steal" << std::endl
-//	;);
-//	if (mpi_data.nTotalProc_ == 1)
-//		return;
-//
-//	// random steal
-//	for (int i = 0; i < mpi_data.nRandStealTrials_ && node_stack_->Empty();
-//			i++) {
-//		// todo: log steal trial
-//		int victim = mpi_data.victims_[mpi_data.rand_m_()];
-//		SendRequest(victim, -1);
-//		waiting_ = true;
-//		DBG(D(2) << "Steal Random:" << "\trandom counter=" << i << std::endl
-//		;);
-//		// todo: measure idle time
-//		while (waiting_)
-//			Probe();
-//	}
-//	if (dtd_.terminated_)
-//		return;
-//
-//	// lifeline steal
-//	for (int i = 0; i < mpi_data.hypercubeDimension_ && node_stack_->Empty();
-//			i++) {
-//		int lifeline = mpi_data.lifelines_[i];
-//		if (lifeline < 0)
-//			break; // break if -1
-//		if (!mpi_data.lifelines_activated_[lifeline]) {
-//			mpi_data.lifelines_activated_[lifeline] = true;
-//			// becomes false only at RecvGive
-//			SendRequest(lifeline, 1);
-//			waiting_ = true;
-//			DBG(
-//					D(2) << "Steal Lifeline:" << "\ti=" << i << "\tz_="
-//							<< mpi_data.hypercubeDimension_ << std::endl
-//					;);
-//			// todo: measure idle time
-//			while (waiting_)
-//				Probe();
-//		}
-//	}
-//}
-
-// mainloop
-//void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data,
-//		TreeSearchData* treesearch_data, GetMinSupData* getminsup_data) {
-//	phase_ = 1;
-//	DBG(D(1) << "MainLoop" << std::endl
-//	;);
-//	while (!mpi_data.dtd_->terminated_) {
-//		while (!mpi_data.dtd_->terminated_) {
-//			if (ProcessNode(mpi_data, treesearch_data, getminsup_data,
-//					(GetTestableData*) NULL)) {
-//				log_.d_.node_stack_max_itm_ =
-//						std::max(log_.d_.node_stack_max_itm_,
-//								(long long int) (treesearch_data->node_stack_->NuItemset()));
-//				log_.d_.node_stack_max_cap_ =
-//						std::max(log_.d_.node_stack_max_cap_,
-//								(long long int) (treesearch_data->node_stack_->UsedCapacity()));
-//				Probe(mpi_data, treesearch_data);
-//				if (mpi_data.dtd_->terminated_)
-//					break;
-//				Distribute(mpi_data, treesearch_data);
-//				Reject(mpi_data); // distribute finished, reject remaining requests
-//				if (mpi_data.mpiRank_ == 0)
-//					CheckCSThreshold(mpi_data);
-//			} else
-//				break;
-//		}
-//		if (mpi_data.dtd_->terminated_)
-//			break;
-//
-//		log_.idle_start_ = timer_->Elapsed();
-//		Reject(mpi_data); // node_stack_ empty. reject requests
-//		Steal(mpi_data); // request steal
-//		if (mpi_data.dtd_->terminated_) {
-//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-//			break;
-//		}
-//
-//		Probe(mpi_data, treesearch_data);
-//		if (mpi_data.dtd_->terminated_) {
-//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-//			break;
-//		}
-//		if (mpi_data.mpiRank_ == 0)
-//			CheckCSThreshold(mpi_data);
-//		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-//	}
-//
-//}
-//
-//void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data,
-//		TreeSearchData* treesearch_data, GetTestableData* gettestable_data) {
-//	phase_ = 2;
-//	DBG(D(1) << "MainLoop" << std::endl
-//	;);
-//	while (!mpi_data.dtd_->terminated_) {
-//		while (!mpi_data.dtd_->terminated_) {
-//			if (ProcessNode(mpi_data, treesearch_data, (GetMinSupData*) NULL,
-//					gettestable_data)) {
-//				log_.d_.node_stack_max_itm_ = std::max(
-//						log_.d_.node_stack_max_itm_,
-//						(long long int) (node_stack_->NuItemset()));
-//				log_.d_.node_stack_max_cap_ = std::max(
-//						log_.d_.node_stack_max_cap_,
-//						(long long int) (node_stack_->UsedCapacity()));
-//				Probe(mpi_data, treesearch_data);
-//				if (mpi_data.dtd_->terminated_)
-//					break;
-//				Distribute(mpi_data, treesearch_data);
-//				Reject(mpi_data); // distribute finished, reject remaining requests
-//			} else
-//				break;
-//		}
-//		if (mpi_data.dtd_->terminated_)
-//			break;
-//
-//		log_.idle_start_ = timer_->Elapsed();
-//		Reject(mpi_data); // node_stack_ empty. reject requests
-//		Steal(mpi_data); // request steal
-//		if (mpi_data.dtd_->terminated_) {
-//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-//			break;
-//		}
-//
-//		Probe(mpi_data, treesearch_data);
-//		if (mpi_data.dtd_->terminated_) {
-//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-//			break;
-//		}
-//
-//		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-//	}
-//
-//}
-//
-//void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data,
-//		GetSignificantData* getsignificant_data) {
-//	DBG(D(1) << "MainLoop" << std::endl
-//	;);
-//
-//	ExtractSignificantSet();
-//	if (mpi_data.mpiRank_ == 0)
-//		SendResultRequest(mpi_data);
-//
-//	while (!mpi_data.dtd_->terminated_)
-//		Probe(mpi_data, (TreeSearchData*) NULL);
-//
-//}
 
 //==============================================================================
 
