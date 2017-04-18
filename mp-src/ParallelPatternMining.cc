@@ -49,6 +49,143 @@ ParallelPatternMining::~ParallelPatternMining() {
 	// TODO: lots of things to delete
 }
 
+void ParallelPatternMining::PreProcessRootNode(GetMinSupData* getminsup_data) {
+	this->getminsup_data = getminsup_data;
+	phase_ = 1;
+	long long int start_time;
+	start_time = timer_->Elapsed();
+
+	expand_num_++;
+
+	// what needed is setting itemset_buf_ to empty itemset
+	// can be done faster
+	// assuming root itemset is pushed before
+	treesearch_data->node_stack_->CopyItem(treesearch_data->node_stack_->Top(),
+			treesearch_data->itemset_buf_);
+	treesearch_data->node_stack_->Pop();
+
+	// dbg
+	DBG(D(2) << "preprocess root node "
+	;);
+	DBG(treesearch_data->node_stack_->Print(D(2), treesearch_data->itemset_buf_)
+	;);
+
+	// calculate support from itemset_buf_
+	bsh_->Set(treesearch_data->sup_buf_);
+	// skipping rest for root node
+
+	int core_i = g_->CoreIndex(*treesearch_data->node_stack_,
+			treesearch_data->itemset_buf_);
+
+	int * ppc_ext_buf;
+	// todo: use database reduction
+
+	bool is_root_node = true;
+
+	// reverse order
+	for (int new_item = d_->NextItemInReverseLoop(is_root_node,
+			mpi_data.mpiRank_, mpi_data.nTotalProc_, d_->NuItems());
+			new_item >= core_i + 1;
+			new_item = d_->NextItemInReverseLoop(is_root_node,
+					mpi_data.mpiRank_, mpi_data.nTotalProc_, new_item)) {
+		// skipping not needed because itemset_buf_ if root itemset
+
+		bsh_->Copy(treesearch_data->sup_buf_, treesearch_data->child_sup_buf_);
+		int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
+				treesearch_data->child_sup_buf_);
+
+		if (sup_num < getminsup_data->lambda_)
+			continue;
+
+		treesearch_data->node_stack_->PushPre();
+		ppc_ext_buf = treesearch_data->node_stack_->Top();
+
+		bool res = g_->PPCExtension(treesearch_data->node_stack_,
+				treesearch_data->itemset_buf_, treesearch_data->child_sup_buf_,
+				core_i, new_item, ppc_ext_buf);
+
+		treesearch_data->node_stack_->SetSup(ppc_ext_buf, sup_num);
+		treesearch_data->node_stack_->PushPostNoSort();
+
+		treesearch_data->node_stack_->Pop(); // always pop
+
+		if (res) {
+			IncCsAccum(sup_num); // increment closed_set_num_array
+			assert(sup_num >= getminsup_data->lambda_);
+			if (ExceedCsThr())
+				getminsup_data->lambda_ = NextLambdaThr();
+		}
+	}
+//	 TODO: lambda_max_ is wrong???
+	printf("lambda_max_ = %d\n", getminsup_data->lambda_max_);
+	MPI_Reduce(getminsup_data->accum_array_, getminsup_data->accum_recv_,
+			getminsup_data->lambda_max_ + 1, MPI_LONG_LONG_INT,
+			MPI_SUM, 0, MPI_COMM_WORLD); // error?
+
+	if (mpi_data.mpiRank_ == 0) {
+		for (int l = 0; l <= getminsup_data->lambda_max_; l++) {
+			getminsup_data->accum_array_[l] = getminsup_data->accum_recv_[l]; // overwrite here
+			getminsup_data->accum_recv_[l] = 0;
+		}
+	} else { // h_!=0
+		for (int l = 0; l <= getminsup_data->lambda_max_; l++) {
+			getminsup_data->accum_array_[l] = 0;
+			getminsup_data->accum_recv_[l] = 0;
+		}
+	}
+
+	if (mpi_data.mpiRank_ == 0)
+		if (ExceedCsThr())
+			getminsup_data->lambda_ = NextLambdaThr();
+	CallBcast(&getminsup_data->lambda_, 1, MPI_INT);
+
+	// reverse order
+	for (int new_item = d_->NextItemInReverseLoop(is_root_node,
+			mpi_data.mpiRank_, mpi_data.nTotalProc_, d_->NuItems());
+			new_item >= core_i + 1;
+			new_item = d_->NextItemInReverseLoop(is_root_node,
+					mpi_data.mpiRank_, mpi_data.nTotalProc_, new_item)) {
+		// skipping not needed because itemset_buf_ if root itemset
+
+		bsh_->Copy(treesearch_data->sup_buf_, treesearch_data->child_sup_buf_);
+		int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
+				treesearch_data->child_sup_buf_);
+
+		if (sup_num < getminsup_data->lambda_)
+			continue;
+
+		treesearch_data->node_stack_->PushPre();
+		ppc_ext_buf = treesearch_data->node_stack_->Top();
+
+		bool res = g_->PPCExtension(treesearch_data->node_stack_,
+				treesearch_data->itemset_buf_, treesearch_data->child_sup_buf_,
+				core_i, new_item, ppc_ext_buf);
+
+		treesearch_data->node_stack_->SetSup(ppc_ext_buf, sup_num);
+		treesearch_data->node_stack_->PushPostNoSort();
+
+		if (!res) { // todo: remove this redundancy
+			treesearch_data->node_stack_->Pop();
+		} else {
+			treesearch_data->node_stack_->SortTop();
+			// note: IncCsAccum already done above
+
+			assert(sup_num >= getminsup_data->lambda_);
+			if (sup_num <= getminsup_data->lambda_)
+				treesearch_data->node_stack_->Pop();
+		}
+	}
+
+	long long int elapsed_time = timer_->Elapsed() - start_time;
+	log_->d_.preprocess_time_ += elapsed_time;
+
+	DBG(
+			D(2) << "preprocess root node finished" << "\tlambda="
+					<< getminsup_data->lambda_ << "\ttime=" << elapsed_time
+					<< std::endl
+			;);
+}
+
 void ParallelPatternMining::GetMinimalSupport(GetMinSupData* getminsup_data) {
 	this->getminsup_data = getminsup_data;
 //	CheckInit();

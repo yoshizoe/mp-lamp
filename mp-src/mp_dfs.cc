@@ -1057,8 +1057,11 @@ void MP_LAMP::Search() {
 		node_stack_->SetSup(root_itemset, lambda_max_);
 		node_stack_->PushPostNoSort();
 	}
+	getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_,
+			dtd_accum_array_base_, accum_array_, dtd_accum_recv_base_,
+			accum_recv_); // The name Phase1 is already so nonsense...
 
-	PreProcessRootNode();
+	psearch->PreProcessRootNode(getminsup_data_);
 	{
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
 			std::cout << "# " << "preprocess end\n";
@@ -1127,10 +1130,6 @@ void MP_LAMP::Search() {
 						<< (timer_->Elapsed() - log_.d_.search_start_time_)
 								/ GIGA << std::endl
 				;);
-//		getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_);
-		getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_,
-				dtd_accum_array_base_, accum_array_, dtd_accum_recv_base_,
-				accum_recv_); // The name Phase1 is already so nonsense...
 		psearch->GetMinimalSupport(getminsup_data_);
 //		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
 		lambda_max_ = getminsup_data_->lambda_max_;

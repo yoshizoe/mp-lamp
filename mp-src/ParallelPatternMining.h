@@ -22,6 +22,7 @@ public:
 
 //	virtual void Search();
 	void GetMinimalSupport(GetMinSupData* getminsup_data);
+	void PreProcessRootNode(GetMinSupData* getminsup_data);
 	void GetTestablePatterns(GetTestableData* gettestable_data);
 	void GetSignificantPatterns(MPI_Data& mpi_data,
 			GetSignificantData* getsignificant_data);
