@@ -77,8 +77,8 @@ public:
 
 //	static int ComputeZ(int p, int l);
 
-	// call this before mainloop ?
-	// set dtd counters and misc.
+// call this before mainloop ?
+// set dtd counters and misc.
 	void Init();
 
 	void CheckPoint();
@@ -218,7 +218,7 @@ private:
 	VariableLengthItemsetStack * give_stack_;
 
 // periodic closed set count reduce.
-	void Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
+//	void Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
 
 // void ProbeAccumTask();
 // void ProbeBasicTask();
@@ -226,15 +226,15 @@ private:
 
 // first, send to random thief and then to lifeline theives
 // random thief has higher priority
-	void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
+//	void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
 
-	void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
-			int steal_num);
+//	void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
+//			int steal_num);
 
-	void Deal(MPI_Data& mpi_data);
+//	void Deal(MPI_Data& mpi_data);
 
 // send reject to remaining requests
-	void Reject(MPI_Data& mpi_data);
+//	void Reject(MPI_Data& mpi_data);
 
 // set this in steal, reset this in RecvGive and RecvReject
 // small difference from x10 implementation
@@ -247,7 +247,7 @@ private:
 // how about prepare int steal_id_; and do steal_id_++/ steal_id_ %= z ?
 // note:
 // don't send multiple requests at once
-	void Steal(MPI_Data& mpi_data);
+//	void Steal(MPI_Data& mpi_data);
 // Steal needs change from x10 because of "bool waiting"
 // Steal sends one request each time it is called
 // there should be steal_state and counters c_r and c_l (random and lifeline)
@@ -272,30 +272,30 @@ private:
 // control
 
 // 0: count, 1: time warp flag, 2: empty flag
-	void SendDTDRequest(MPI_Data& mpi_data);
-	void RecvDTDRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-			int src);
-
-	bool DTDReplyReady(MPI_Data& mpi_data) const;
-	void DTDCheck(MPI_Data& mpi_data);
-
-// 0: count, 1: time warp flag, 2: empty flag
-	void SendDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	void RecvDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-			int src);
-
-	bool DTDAccumReady(MPI_Data& mpi_data) const;
-
-// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendDTDAccumRequest(MPI_Data& mpi_data);
-	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
-
-// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendDTDAccumReply(MPI_Data& mpi_data);
-	void RecvDTDAccumReply(MPI_Data& mpi_data, int src);
-
-	void SendBcastFinish(MPI_Data& mpi_data);
-	void RecvBcastFinish(MPI_Data& mpi_data, int src);
+//	void SendDTDRequest(MPI_Data& mpi_data);
+//	void RecvDTDRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+//			int src);
+//
+//	bool DTDReplyReady(MPI_Data& mpi_data) const;
+//	void DTDCheck(MPI_Data& mpi_data);
+//
+//// 0: count, 1: time warp flag, 2: empty flag
+//	void SendDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
+//	void RecvDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+//			int src);
+//
+//	bool DTDAccumReady(MPI_Data& mpi_data) const;
+//
+//// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+//	void SendDTDAccumRequest(MPI_Data& mpi_data);
+//	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
+//
+//// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+//	void SendDTDAccumReply(MPI_Data& mpi_data);
+//	void RecvDTDAccumReply(MPI_Data& mpi_data, int src);
+//
+//	void SendBcastFinish(MPI_Data& mpi_data);
+//	void RecvBcastFinish(MPI_Data& mpi_data, int src);
 
 //--------
 
@@ -305,35 +305,35 @@ private:
 // basic
 
 // send recv functions
-	void SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline); // for random thieves, is_lifeline = -1
-	void RecvRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-			int src);
-
-// 0: time zone, 1: is_lifeline
-	void SendReject(MPI_Data& mpi_data, int dst);
-	void RecvReject(MPI_Data& mpi_data, int src);
-
-// 1: time zone
-	void SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int dst,
-			int is_lifeline);
-
-// sets lifelines_activated_ = false
-// lifelines_activated_ becomes false only in this case (reject does NOT)
-	void RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data, int src,
-			MPI_Status status);
-
-	void SendLambda(MPI_Data& mpi_data, int lambda);
-	void RecvLambda(MPI_Data& mpi_data, int src);
+//	void SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline); // for random thieves, is_lifeline = -1
+//	void RecvRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+//			int src);
+//
+//// 0: time zone, 1: is_lifeline
+//	void SendReject(MPI_Data& mpi_data, int dst);
+//	void RecvReject(MPI_Data& mpi_data, int src);
+//
+//// 1: time zone
+//	void SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int dst,
+//			int is_lifeline);
+//
+//// sets lifelines_activated_ = false
+//// lifelines_activated_ becomes false only in this case (reject does NOT)
+//	void RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data, int src,
+//			MPI_Status status);
+//
+//	void SendLambda(MPI_Data& mpi_data, int lambda);
+//	void RecvLambda(MPI_Data& mpi_data, int src);
 
 // 0: time zone
 // search for depth 1 and get initial lambda
-	void PreProcessRootNode();
+//	void PreProcessRootNode();
 
 // provide int n and bool n_is_ms_ (if n_is_ms_==false, it shows number of nodes)
-	bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data,
-			GetMinSupData* getminsup_data_, GetTestableData* gettestable_data);
-	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
-			long long int start_time);
+//	bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data,
+//			GetMinSupData* getminsup_data_, GetTestableData* gettestable_data);
+//	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
+//			long long int start_time);
 
 //	bool ProcessNodeStraw1(int n);
 //	bool ProcessNodeStraw2(int n);
@@ -367,15 +367,15 @@ private:
 
 // void ProbeThirdPhaseTask();
 
-	bool AccumCountReady(MPI_Data& mpi_data) const;
-
-	void SendResultRequest(MPI_Data& mpi_data);
-	void RecvResultRequest(MPI_Data& mpi_data, int src);
-
-	void SendResultReply(MPI_Data& mpi_data);
-	void RecvResultReply(MPI_Data& mpi_data, int src, MPI_Status status);
-
-	void ExtractSignificantSet();
+//	bool AccumCountReady(MPI_Data& mpi_data) const;
+//
+//	void SendResultRequest(MPI_Data& mpi_data);
+//	void RecvResultRequest(MPI_Data& mpi_data, int src);
+//
+//	void SendResultReply(MPI_Data& mpi_data);
+//	void RecvResultReply(MPI_Data& mpi_data, int src, MPI_Status status);
+//
+//	void ExtractSignificantSet();
 
 // insert pointer into significant_map_ (do not sort the stack itself)
 	void SortSignificantSets();
