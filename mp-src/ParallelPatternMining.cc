@@ -226,7 +226,7 @@ void ParallelPatternMining::GetSignificantPatterns(MPI_Data& mpi_data,
 	}
 }
 
-void ParallelPatternMining::Probe(MPI_Data& mpi_data,
+bool ParallelPatternMining::Probe(MPI_Data& mpi_data,
 		TreeSearchData* treesearch_data) {
 	DBG(D(3) << "Probe" << std::endl
 	;);
@@ -243,65 +243,7 @@ void ParallelPatternMining::Probe(MPI_Data& mpi_data,
 				D(4) << "CallIprobe returned src=" << probe_src << "\ttag="
 						<< probe_tag << std::endl
 				;);
-		switch (probe_tag) {
-		// control tasks
-		case Tag::DTD_REQUEST:
-			RecvDTDRequest(mpi_data, treesearch_data, probe_src);
-			break;
-		case Tag::DTD_REPLY:
-			RecvDTDReply(mpi_data, treesearch_data, probe_src);
-			break;
-
-		case Tag::BCAST_FINISH:
-			RecvBcastFinish(mpi_data, probe_src);
-			break;
-
-// basic tasks
-		case Tag::REQUEST:
-			RecvRequest(mpi_data, treesearch_data, probe_src);
-			break;
-		case Tag::REJECT:
-			RecvReject(mpi_data, probe_src);
-			break;
-		case Tag::GIVE:
-			RecvGive(mpi_data, treesearch_data, probe_src, probe_status);
-			break;
-
-			/**
-			 * Messages used for SIGNIFICANCE TEST
-			 */
-		case Tag::RESULT_REQUEST:
-			RecvResultRequest(mpi_data, probe_src);
-			break;
-		case Tag::RESULT_REPLY:
-			RecvResultReply(mpi_data, probe_src, probe_status);
-			break;
-			/**
-			 * Messages used ONLY for Get Minimal Support
-			 */
-		case Tag::DTD_ACCUM_REQUEST:
-			assert(phase_ == 1);
-			RecvDTDAccumRequest(mpi_data, probe_src);
-			break;
-		case Tag::DTD_ACCUM_REPLY:
-			assert(phase_ == 1);
-			RecvDTDAccumReply(mpi_data, probe_src);
-			break;
-		case Tag::LAMBDA:
-			assert(phase_ == 1);
-			RecvLambda(mpi_data, probe_src);
-			break;
-		default:
-			printf("UNKNONW TAG\n");
-			DBG(
-					D(1) << "unknown Tag=" << probe_tag
-							<< " received in Probe: " << std::endl
-					;
-			)
-			;
-			MPI_Abort(MPI_COMM_WORLD, 1);
-			break;
-		}
+		ProbeExecute(mpi_data, treesearch_data, &probe_status, probe_src, probe_tag);
 	}
 
 	// capacity, lambda, phase
@@ -339,6 +281,69 @@ void ParallelPatternMining::Probe(MPI_Data& mpi_data,
 	log_->d_.probe_time_max_ = std::max(elapsed_time, log_->d_.probe_time_max_);
 }
 
+bool ParallelPatternMining::ProbeExecute(MPI_Data& mpi_data,
+		TreeSearchData* treesearch_data, MPI_Status* probe_status,
+		int probe_src, int probe_tag) {
+	switch (probe_tag) {
+	// control tasks
+	case Tag::DTD_REQUEST:
+		RecvDTDRequest(mpi_data, treesearch_data, probe_src);
+		break;
+	case Tag::DTD_REPLY:
+		RecvDTDReply(mpi_data, treesearch_data, probe_src);
+		break;
+	case Tag::BCAST_FINISH:
+		RecvBcastFinish(mpi_data, probe_src);
+		break;
+
+// basic tasks
+	case Tag::REQUEST:
+		RecvRequest(mpi_data, treesearch_data, probe_src);
+		break;
+	case Tag::REJECT:
+		RecvReject(mpi_data, probe_src);
+		break;
+	case Tag::GIVE:
+		RecvGive(mpi_data, treesearch_data, probe_src, *probe_status);
+		break;
+
+		/**
+		 * SIGNIFICANTSET
+		 */
+	case Tag::RESULT_REQUEST:
+		RecvResultRequest(mpi_data, probe_src);
+		break;
+	case Tag::RESULT_REPLY:
+		RecvResultReply(mpi_data, probe_src, *probe_status);
+		break;
+		/**
+		 * MINIMALSUPPORT
+		 */
+	case Tag::DTD_ACCUM_REQUEST:
+		assert(phase_ == 1);
+		RecvDTDAccumRequest(mpi_data, probe_src); // TODO: This can be solved by polymorphism.
+		break;
+	case Tag::DTD_ACCUM_REPLY:
+		assert(phase_ == 1);
+		RecvDTDAccumReply(mpi_data, probe_src);
+		break;
+	case Tag::LAMBDA:
+		assert(phase_ == 1);
+		RecvLambda(mpi_data, probe_src);
+		break;
+	default:
+		printf("NOT A STANDARD TAG\n");
+		DBG(
+				D(1) << "unknown Tag=" << probe_tag << " received in Probe: "
+						<< std::endl
+				;
+		);
+		MPI_Abort(MPI_COMM_WORLD, 1);
+		return false;
+		break;
+	}
+	return true;
+}
 //==============================================================================
 
 void ParallelPatternMining::Distribute(MPI_Data& mpi_data,
@@ -516,7 +521,7 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 				treesearch_data->itemset_buf_);
 		treesearch_data->node_stack_->Pop();
 
-		// dbg
+// dbg
 		DBG(D(3) << "expanded "
 		;);
 		DBG(
@@ -524,8 +529,8 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 						treesearch_data->itemset_buf_)
 				;);
 
-		// TODO: THIS SHIT IS DEPENDENT ON bsh_
-		// calculate support from itemset_buf_
+// TODO: THIS SHIT IS DEPENDENT ON bsh_
+// calculate support from itemset_buf_
 		bsh_->Set(treesearch_data->sup_buf_);
 		{
 			int n = treesearch_data->node_stack_->GetItemNum(
@@ -541,7 +546,7 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 				treesearch_data->itemset_buf_);
 
 		int * ppc_ext_buf;
-		// todo: use database reduction
+// todo: use database reduction
 
 		assert(
 				phase_ != 1
@@ -552,8 +557,8 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 				treesearch_data->itemset_buf_) == 0);
 
 		int accum_period_counter_ = 0;
-		// reverse order
-		// for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
+// reverse order
+// for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
 		for (int new_item = d_->NextItemInReverseLoop(is_root_node,
 				mpi_data.mpiRank_, mpi_data.nTotalProc_, d_->NuItems());
 				new_item >= core_i + 1;
@@ -911,8 +916,8 @@ void ParallelPatternMining::RecvDTDAccumReply(MPI_Data& mpi_data, int src) {
 	MPI_Status recv_status;
 
 	CallRecv(getminsup_data->dtd_accum_recv_base_,
-			getminsup_data->lambda_max_ + 4, MPI_LONG_LONG_INT, src,
-			Tag::DTD_ACCUM_REPLY, &recv_status);
+			getminsup_data->lambda_max_ + 4,
+			MPI_LONG_LONG_INT, src, Tag::DTD_ACCUM_REPLY, &recv_status);
 	assert(src == recv_status.MPI_SOURCE);
 
 	int count = (int) (getminsup_data->dtd_accum_recv_base_[0]);
@@ -1460,7 +1465,7 @@ void ParallelPatternMining::RecvLambda(MPI_Data& mpi_data, int src) {
 	if (new_lambda > getminsup_data->lambda_) {
 		SendLambda(mpi_data, new_lambda);
 		getminsup_data->lambda_ = new_lambda;
-		// todo: do database reduction
+// todo: do database reduction
 	}
 }
 bool ParallelPatternMining::AccumCountReady(MPI_Data& mpi_data) const {
@@ -1498,7 +1503,7 @@ int ParallelPatternMining::NextLambdaThr() const {
 		if (getminsup_data->accum_array_[si] > getminsup_data->cs_thr_[si])
 			break;
 	return si + 1;
-	// it is safe because lambda_ higher than max results in immediate search finish
+// it is safe because lambda_ higher than max results in immediate search finish
 }
 
 /**
@@ -1620,7 +1625,7 @@ void ParallelPatternMining::ExtractSignificantSet() {
 	std::multimap<double, int *>::iterator it;
 	for (it = getsignificant_data->freq_map_->begin();
 			it != getsignificant_data->freq_map_->end(); ++it) {
-		// permits == case
+// permits == case
 		if ((*it).first <= getsignificant_data->final_sig_level_) {
 			getsignificant_data->significant_stack_->PushPre();
 			int * item = getsignificant_data->significant_stack_->Top();

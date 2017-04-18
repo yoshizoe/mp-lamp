@@ -25,7 +25,7 @@ public:
 	virtual void Search();
 
 protected:
-	virtual void Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data) = 0;
+	virtual bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data) = 0;
 	virtual void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data) = 0;
 	virtual void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
 			int steal_num) = 0;

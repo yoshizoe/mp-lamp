@@ -13,7 +13,7 @@
 
 namespace lamp_search {
 
-class ParallelPatternMining : public ParallelSearch {
+class ParallelPatternMining: public ParallelSearch {
 public:
 	ParallelPatternMining(Database<uint64> * d_, LampGraph<uint64> * g_,
 			VariableBitsetHelper<uint64> * bsh_, MPI_Data& mpi_data,
@@ -50,7 +50,12 @@ private:
 	 * Methods used for ALL searches: Maybe they should be overrided by other methods.
 	 *
 	 */
-	void Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
+	bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
+	bool ProbeExecute(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+			MPI_Status* probe_status, int probe_src, int probe_tag);
+//	bool ProbeExecuteMINSUP(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+//			MPI_Status& probe_status, int probe_src, int probe_tag);
+
 	void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
 	void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
 			int steal_num);
@@ -81,7 +86,7 @@ private:
 
 //	bool DTDAccumReady(MPI_Data& mpi_data) const;
 
-	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendDTDAccumRequest(MPI_Data& mpi_data);
 	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
 
