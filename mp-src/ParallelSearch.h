@@ -25,6 +25,9 @@ public:
 	virtual void Search();
 
 protected:
+	/**
+	 * Parallel Search Basic Methods.
+	 */
 	virtual bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data) = 0;
 	virtual void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data) = 0;
 	virtual void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
@@ -33,6 +36,23 @@ protected:
 	virtual void Steal(MPI_Data& mpi_data) = 0;
 	virtual void Check(MPI_Data& mpi_data) = 0;
 	virtual bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data) = 0;
+
+	/**
+	 * Network
+	 */
+	bool IsLeafInTopology(MPI_Data& mpi_data) const;
+
+	/**
+	 * Helper methods to encapsulate MPI operations with timer and logger.
+	 * TODO: these methods should be generally in Parallel class.
+	 */
+	int CallIprobe(MPI_Status * status, int * count, int * src);
+	int CallRecv(void * buffer, int count, MPI_Datatype type, int src, int tag,
+			MPI_Status * status);
+	int CallBsend(void * buffer, int count_int, MPI_Datatype type, int dest,
+			int tag);
+	int CallBcast(void * buffer, int data_count, MPI_Datatype type);
+
 
 	MPI_Data& mpi_data;
 	TreeSearchData* treesearch_data;

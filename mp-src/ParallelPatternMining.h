@@ -13,6 +13,14 @@
 
 namespace lamp_search {
 
+/**
+ * TODO: This class is intended to be a parent class for pattern mining classes.
+ *       For now it takes responsibility to run
+ *       - GetMinimalSupport
+ *       - GetTestablePatterns
+ *       - GetSignificantPatterns
+ *       These functions should be factored out as subclasses.
+ */
 class ParallelPatternMining: public ParallelSearch {
 public:
 	ParallelPatternMining(Database<uint64> * d_, LampGraph<uint64> * g_,
@@ -26,7 +34,8 @@ public:
 	void GetTestablePatterns(GetTestableData* gettestable_data);
 	void GetSignificantPatterns(MPI_Data& mpi_data,
 			GetSignificantData* getsignificant_data);
-private:
+
+protected:
 	/*
 	 * Domain graph
 	 */
@@ -51,7 +60,7 @@ private:
 	 *
 	 */
 	bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	bool ProbeExecute(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+	virtual bool ProbeExecute(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 			MPI_Status* probe_status, int probe_src, int probe_tag);
 //	bool ProbeExecuteMINSUP(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 //			MPI_Status& probe_status, int probe_src, int probe_tag);
@@ -85,14 +94,6 @@ private:
 			int src);
 
 //	bool DTDAccumReady(MPI_Data& mpi_data) const;
-
-// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendDTDAccumRequest(MPI_Data& mpi_data);
-	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
-
-	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendDTDAccumReply(MPI_Data& mpi_data);
-	void RecvDTDAccumReply(MPI_Data& mpi_data, int src);
 
 	void SendBcastFinish(MPI_Data& mpi_data);
 	void RecvBcastFinish(MPI_Data& mpi_data, int src);
@@ -133,24 +134,25 @@ private:
 	void SendResultReply(MPI_Data& mpi_data);
 	void RecvResultReply(MPI_Data& mpi_data, int src, MPI_Status status);
 
-	bool IsLeafInTopology(MPI_Data& mpi_data) const;
 
 	/**
 	 * Basic operations
 	 *
 	 */
 // return flag. if (flag), it is ready to receive
-	int CallIprobe(MPI_Status * status, int * count, int * src);
-	int CallRecv(void * buffer, int count, MPI_Datatype type, int src, int tag,
-			MPI_Status * status);
-	int CallBsend(void * buffer, int count_int, MPI_Datatype type, int dest,
-			int tag);
-	int CallBcast(void * buffer, int data_count, MPI_Datatype type);
+
 
 	/**
 	 * GetMinSup Functions
 	 *
 	 */
+	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+	void SendDTDAccumRequest(MPI_Data& mpi_data);
+	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
+
+	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+	void SendDTDAccumReply(MPI_Data& mpi_data);
+	void RecvDTDAccumReply(MPI_Data& mpi_data, int src);
 	void SendLambda(MPI_Data& mpi_data, int lambda);
 	void RecvLambda(MPI_Data& mpi_data, int src);
 	void CheckCSThreshold(MPI_Data& mpi_data);
