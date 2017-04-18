@@ -11,78 +11,100 @@
 #include "mpi.h"
 #include <boost/random.hpp>
 #include "FixedSizeStack.h"
+#include "StealState.h"
+#include "Log.h"
+#include "DTD.h"
+#include "SignificantSetResults.h"
+#include "../src/variable_length_itemset.h"
+#include "../src/utils.h"
+#include "../src/lamp_graph.h"
+#include "../src/database.h"
+#include "../src/variable_bitset_array.h"
+#include "../src/timer.h"
+
 // GLB variables
 namespace lamp_search {
 
 struct TreeSearchData {
-	TreeSearchData(VariableLengthItemsetStack * stack, Database<uint64> * d_,
-			LampGraph<uint64> * g_, VariableBitsetHelper<uint64> * bsh_,
-			Log *log_, Timer * timer_) :
-			node_stack_(stack), d_(d_), g_(g_), bsh_(bsh_), log_(log_), timer_(
+	TreeSearchData(VariableLengthItemsetStack * nstack,
+			VariableLengthItemsetStack * gstack, StealState* stealer_,
+			int* itemset_buf_, uint64* sup_buf_, uint64* child_sup_buf_,
+			Database<uint64> * d_, LampGraph<uint64> * g_,
+			VariableBitsetHelper<uint64> * bsh_, Log *log_, Timer * timer_) :
+			node_stack_(nstack), give_stack_(gstack), stealer_(stealer_), itemset_buf_(
+					itemset_buf_), sup_buf_(sup_buf_), child_sup_buf_(
+					child_sup_buf_), d_(d_), g_(g_), bsh_(bsh_), log_(log_), timer_(
 					timer_) {
 	}
 	// Search fields
 	VariableLengthItemsetStack * node_stack_;
+	VariableLengthItemsetStack * give_stack_;
+	StealState* stealer_;
+	int* itemset_buf_;
+	uint64 * sup_buf_, *child_sup_buf_;
+
+	// Utils
+	Log *log_;
+	Timer * timer_;
+
+	// TODO: these should be in Parallel Pattern Mining...
 	// Domain fields. TODO: Way to wacky to be dependent on these...
 	Database<uint64> * d_;
 	LampGraph<uint64> * g_;
 	VariableBitsetHelper<uint64> * bsh_; // bitset helper
-	// Utils
-	Log *log_;
-	Timer * timer_;
 };
 
 struct GetMinSupData {
-	GetMinSupData(int lambda_max, int lambda, long long int* cs_thr
-//				,
-//				long long int * dtd_accum_array_base,
-//				long long int * accum_array,
-//				long long int * dtd_accum_recv_base, long long int * accum_recv
-			) :
-			lambda_max_(lambda_max), lambda_(lambda), cs_thr_(cs_thr)
-//		, dtd_accum_array_base_(
-//						dtd_accum_array_base), accum_array_(accum_array), dtd_accum_recv_base_(
-//						dtd_accum_recv_base), accum_recv_(accum_recv)
-	{
+	GetMinSupData(int lambda_max, int lambda, long long int* cs_thr,
+			long long int * dtd_accum_array_base, long long int * accum_array,
+			long long int * dtd_accum_recv_base, long long int * accum_recv) :
+			lambda_max_(lambda_max), lambda_(lambda), cs_thr_(cs_thr), dtd_accum_array_base_(
+					dtd_accum_array_base), accum_array_(accum_array), dtd_accum_recv_base_(
+					dtd_accum_recv_base), accum_recv_(accum_recv) {
 	}
-	;
 	int lambda_max_;
 	int lambda_;
 	long long int * cs_thr_;
-//		// 0: count, 1: time warp, 2: empty flag, 3--: array
-//		long long int * dtd_accum_array_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
-//		// -3: count, -2: time warp, -1: empty flag, 0--: array
-//		long long int * accum_array_; // int array of [0...lambda_max_] (size lambda_max_+1)
-//
-//		// 0: count, 1: time warp, 2: empty flag, 3--: array
-//		long long int * dtd_accum_recv_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
-//		// -3: count, -2: time warp, -1: empty flag, 0--: array
-//		long long int * accum_recv_; // int array of [0...lambda_max_] (size lambda_max_+1)
+	// 0: count, 1: time warp, 2: empty flag, 3--: array
+	long long int * dtd_accum_array_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
+	// -3: count, -2: time warp, -1: empty flag, 0--: array
+	long long int * accum_array_; // int array of [0...lambda_max_] (size lambda_max_+1)
+
+	// 0: count, 1: time warp, 2: empty flag, 3--: array
+	long long int * dtd_accum_recv_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
+	// -3: count, -2: time warp, -1: empty flag, 0--: array
+	long long int * accum_recv_; // int array of [0...lambda_max_] (size lambda_max_+1)
 };
+
 struct GetTestableData {
 	GetTestableData(int lambda_max_minus_one,
 			VariableLengthItemsetStack * freq_stack,
-			std::multimap<double, int *> freq_map, double sig_level) :
+			std::multimap<double, int *>* freq_map, double sig_level) :
 			freqThreshold_(lambda_max_minus_one), freq_stack_(freq_stack), freq_map_(
 					freq_map), sig_level_(sig_level) {
 	}
 	int freqThreshold_;
 	// Retrun variables. Used for GetSignificantPatterns.
 	VariableLengthItemsetStack * freq_stack_; // record freq itemsets
-	std::multimap<double, int *> freq_map_; // record (pval, *itemsets)
+	std::multimap<double, int *>* freq_map_; // record (pval, *itemsets)
 	double sig_level_;
+//	VariableLengthItemsetStack * significant_stack_; // TODO:
 };
-struct GetSignificantData {
-	VariableLengthItemsetStack * freq_stack_; // record freq itemsets
-	std::multimap<double, int *> freq_map_; // record (pval, *itemsets)
 
-	// Domain variables
-	Database<uint64> * d_;
-	LampGraph<uint64> * g_;
-	VariableBitsetHelper<uint64> * bsh_; // bitset helper
-	// Utils
-	Log *log_;
-	Timer * timer_;
+struct GetSignificantData {
+	GetSignificantData(VariableLengthItemsetStack * freq_stack_,
+			std::multimap<double, int *>* freq_map_, double final_sig_level_,
+			VariableLengthItemsetStack * significant_stack_,
+			std::set<SignificantSetResult, sigset_compare>* significant_set_) :
+			freq_stack_(freq_stack_), freq_map_(freq_map_), final_sig_level_(
+					final_sig_level_), significant_stack_(significant_stack_), significant_set_(
+					significant_set_) {
+	}
+	VariableLengthItemsetStack * freq_stack_; // record freq itemsets
+	std::multimap<double, int *>* freq_map_; // record (pval, *itemsets)
+	double final_sig_level_;
+	VariableLengthItemsetStack * significant_stack_;
+	std::set<SignificantSetResult, sigset_compare>* significant_set_;
 };
 
 struct MPI_Data {
@@ -93,7 +115,8 @@ struct MPI_Data {
 					l), hypercubeDimension_(
 					ComputeZ(nTotalProc_, lHypercubeEdge_)), rng_(mpiRank_), dst_p_(
 					0, nTotalProc_ - 1), dst_m_(0, nRandStealCands_ - 1), rand_p_(
-					rng_, dst_p_), rand_m_(rng_, dst_m_) {
+					rng_, dst_p_), rand_m_(rng_, dst_m_), echo_waiting_(false), waiting_(
+					false) {
 		// Initializing temporary variables in parenths.
 		processing_node_ = false;
 		bsend_buffer_ = new int[buffer_size];
@@ -118,7 +141,6 @@ struct MPI_Data {
 			lifelines_activated_[pi] = false;
 
 		bcast_source_ = -1;
-		echo_waiting_ = false;
 
 		for (std::size_t i = 0; i < k_echo_tree_branch; i++) {
 			bcast_targets_[i] = -1;
@@ -227,7 +249,7 @@ struct MPI_Data {
 
 	// Temporary variables
 	bool processing_node_; // prevent termination while processing node
-
+	bool waiting_;
 };
 }
 #endif /* MP_SRC_MPI_DATA_H_ */

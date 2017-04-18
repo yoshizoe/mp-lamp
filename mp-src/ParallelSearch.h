@@ -1,44 +1,51 @@
 /*
  * ParallelSearch.h
  *
- *  Created on: Apr 17, 2017
+ *  Created on: Apr 18, 2017
  *      Author: yuu
  */
 
 #ifndef MP_SRC_PARALLELSEARCH_H_
 #define MP_SRC_PARALLELSEARCH_H_
+
+#include "../src/variable_length_itemset.h"
 #include "MPI_Data.h"
+#include "mpi_tag.h"
 
 namespace lamp_search {
 
+/*
+ * TODO: Should Extract more fields here.
+ */
 class ParallelSearch {
 public:
-	ParallelSearch(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-			Log* log, Timer* timer);
+	ParallelSearch(MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
+			Timer* timer);
 	virtual ~ParallelSearch();
-//	void Search();
+	virtual void Search();
 
-	void GetMinimalSupport(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-			GetMinSupData* getminsup_data);
-private:
+protected:
+	virtual void Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data) = 0;
+	virtual void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data) = 0;
+	virtual void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
+			int steal_num) = 0;
+	virtual void Reject(MPI_Data& mpi_data) = 0;
+	virtual void Steal(MPI_Data& mpi_data) = 0;
+	virtual void Check(MPI_Data& mpi_data) = 0;
+	virtual bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data) = 0;
+
 	MPI_Data& mpi_data;
 	TreeSearchData* treesearch_data;
+	static const int k_echo_tree_branch;
+
+	/**
+	 * Utility
+	 */
 	Log* log_;
 	Timer* timer_;
 
-	int phase_; // TODO: remove it.
-
-
-	/**
-	 * Methods used for ALL searches: Maybe they should be overrided by other methods.
-	 *
-	 */
-	void Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
-			int steal_num);
-	void Deal(MPI_Data& mpi_data);
-	void Reject(MPI_Data& mpi_data);
+	static std::ofstream null_stream_;
+	std::ostream& D(int level, bool show_phase = true);
 };
 
 } /* namespace lamp_search */

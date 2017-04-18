@@ -50,49 +50,15 @@
 #include "database.h"
 #include "lamp_graph.h"
 
+#include "MPI_Data.h"
 #include "StealState.h"
 #include "SignificantSetResults.h"
 #include "Log.h"
 #include "DTD.h"
 #include "FixedSizeStack.h"
-#include "MPI_Data.h"
+#include "mpi_tag.h"
 
 namespace lamp_search {
-
-// use these as mpi tag
-struct Tag {
-	enum TaskType {
-		// control tasks
-		CONTROL_TASK_BEGIN = 0,
-		DTD_REQUEST,
-		DTD_REPLY,
-
-		DTD_ACCUM_REQUEST, // request reporting accum count
-		DTD_ACCUM_REPLY, // reduce closed set count
-
-		BCAST_FINISH,
-		CONTROL_TASK_END,
-
-		// basic tasks
-		BASIC_TASK_BEGIN,
-
-		LAMBDA, // for lamp
-
-		REQUEST, // request tasks
-		REJECT, // reject requests
-		GIVE, // send tasks
-
-		BASIC_TASK_END,
-
-		// third phase tasks
-		THIRD_PHASE_BEGIN,
-
-		RESULT_REQUEST,
-		RESULT_REPLY,
-
-		THIRD_PHASE_END,
-	};
-};
 
 class MP_LAMP {
 public:
@@ -154,15 +120,13 @@ public:
 	std::ostream & PrintPLog(std::ostream & out);
 	std::ostream & PrintAggrPLog(std::ostream & out);
 
-
-
 private:
-	void GetMinimalSupport(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-			GetMinSupData* getminsup_data_);
-	void GetTestablePatterns(MPI_Data& mpi_data,
-			TreeSearchData* treesearch_data, GetTestableData* gettestable_data);
-	void GetSignificantPatterns(MPI_Data& mpi_data,
-			GetSignificantData* getsignificant_data);
+//	void GetMinimalSupport(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+//			GetMinSupData* getminsup_data_);
+//	void GetTestablePatterns(MPI_Data& mpi_data,
+//			TreeSearchData* treesearch_data, GetTestableData* gettestable_data);
+//	void GetSignificantPatterns(MPI_Data& mpi_data,
+//			GetSignificantData* getsignificant_data);
 
 	static const int k_int_max;
 	// assuming (digits in long long int) > (bits of double mantissa)
@@ -274,7 +238,7 @@ private:
 
 // set this in steal, reset this in RecvGive and RecvReject
 // small difference from x10 implementation
-	bool waiting_;
+//	bool waiting_;
 
 // send steal requests
 // two phase, 1, random, 2, lifeline
@@ -433,7 +397,6 @@ private:
 			MPI_Status * status);
 	int CallBsend(void * buffer, int count_int, MPI_Datatype type, int dest,
 			int tag);
-
 	int CallBcast(void * buffer, int data_count, MPI_Datatype type);
 // todo: implement call reduce, call gather
 

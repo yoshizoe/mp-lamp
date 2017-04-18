@@ -7,6 +7,7 @@
 
 #ifndef MP_SRC_SIGNIFICANTSETRESULTS_H_
 #define MP_SRC_SIGNIFICANTSETRESULTS_H_
+#include "../src/variable_length_itemset.h"
 
 namespace lamp_search {
 class SignificantSetResult {

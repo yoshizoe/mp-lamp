@@ -8,6 +8,8 @@
 #ifndef MP_SRC_DTD_H_
 #define MP_SRC_DTD_H_
 
+#include <assert.h>
+
 namespace lamp_search {
 
 // Mattern 1987

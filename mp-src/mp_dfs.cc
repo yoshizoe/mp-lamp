@@ -39,8 +39,8 @@
 #include <boost/random.hpp>
 
 #include "gflags/gflags.h"
-
 #include "mp_dfs.h"
+#include "ParallelPatternMining.h"
 
 #ifdef __CDT_PARSER__
 #undef DBG
@@ -97,9 +97,8 @@ MP_LAMP::MP_LAMP(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
 				nu_proc, n, n_is_ms, w, l, m, k_echo_tree_branch, &dtd_), d_(
 		NULL), g_(NULL), bsh_(NULL), timer_(Timer::GetInstance()), dtd_accum_array_base_(
 		NULL), accum_array_(NULL), dtd_accum_recv_base_(NULL), accum_recv_(
-		NULL), give_stack_(NULL), waiting_(false), stealer_(
-				mpi_data_.nRandStealTrials_, mpi_data_.hypercubeDimension_), phase_(
-				0), sup_buf_(
+		NULL), give_stack_(NULL), stealer_(mpi_data_.nRandStealTrials_,
+				mpi_data_.hypercubeDimension_), phase_(0), sup_buf_(
 		NULL), child_sup_buf_(NULL), freq_stack_(NULL), significant_stack_(
 		NULL), total_expand_num_(0ll), expand_num_(0ll), closed_set_num_(0ll), final_closed_set_num_(
 				0ll), final_support_(0), final_sig_level_(0.0), last_bcast_was_dtd_(
@@ -533,7 +532,7 @@ void MP_LAMP::Init() {
 	log_.Init();
 
 	stealer_.Init();
-	waiting_ = false;
+	mpi_data_.waiting_ = false;
 
 	last_bcast_was_dtd_ = false;
 }
@@ -549,7 +548,7 @@ void MP_LAMP::CheckPoint() {
 
 	dtd_.CheckPoint();
 	stealer_.Init();
-	waiting_ = false;
+	mpi_data_.waiting_ = false;
 
 	mpi_data_.thieves_->Clear();
 	mpi_data_.lifeline_thieves_->Clear();
@@ -767,7 +766,8 @@ void MP_LAMP::SendDTDReply(MPI_Data& mpi_data,
 	int message[3];
 	// using reduced vars
 	message[0] = mpi_data.dtd_->count_ + mpi_data.dtd_->reduce_count_;
-	bool tw_flag = mpi_data.dtd_->time_warp_ || mpi_data.dtd_->reduce_time_warp_;
+	bool tw_flag = mpi_data.dtd_->time_warp_
+			|| mpi_data.dtd_->reduce_time_warp_;
 	message[1] = (tw_flag ? 1 : 0);
 	// for Steal
 	mpi_data.dtd_->not_empty_ = !(treesearch_data->node_stack_->Empty())
@@ -777,7 +777,8 @@ void MP_LAMP::SendDTDReply(MPI_Data& mpi_data,
 	// dtd_.not_empty_ =
 	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
 	//     waiting_ || mpi_data.processing_node_;
-	bool em_flag = mpi_data.dtd_->not_empty_ || mpi_data.dtd_->reduce_not_empty_;
+	bool em_flag = mpi_data.dtd_->not_empty_
+			|| mpi_data.dtd_->reduce_not_empty_;
 	message[2] = (em_flag ? 1 : 0);
 	DBG(
 			D(3) << "SendDTDReply: dst = " << mpi_data.bcast_source_
@@ -876,7 +877,8 @@ void MP_LAMP::RecvDTDAccumRequest(MPI_Data& mpi_data, int src) {
 void MP_LAMP::SendDTDAccumReply(MPI_Data& mpi_data) {
 	dtd_accum_array_base_[0] = mpi_data.dtd_->count_
 			+ mpi_data.dtd_->reduce_count_;
-	bool tw_flag = mpi_data.dtd_->time_warp_ || mpi_data.dtd_->reduce_time_warp_;
+	bool tw_flag = mpi_data.dtd_->time_warp_
+			|| mpi_data.dtd_->reduce_time_warp_;
 	dtd_accum_array_base_[1] = (tw_flag ? 1 : 0);
 	// for Steal
 	mpi_data.dtd_->not_empty_ = !(node_stack_->Empty())
@@ -886,7 +888,8 @@ void MP_LAMP::SendDTDAccumReply(MPI_Data& mpi_data) {
 	// mpi_data.dtd_->not_empty_ =
 	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
 	//     waiting_ || mpi_data.processing_node_;
-	bool em_flag = mpi_data.dtd_->not_empty_ || mpi_data.dtd_->reduce_not_empty_;
+	bool em_flag = mpi_data.dtd_->not_empty_
+			|| mpi_data.dtd_->reduce_not_empty_;
 	dtd_accum_array_base_[2] = (em_flag ? 1 : 0);
 
 	DBG(
@@ -1019,14 +1022,17 @@ void MP_LAMP::RecvBcastFinish(MPI_Data& mpi_data, int src) {
 	DBG(D(2) << "terminated" << std::endl
 	;);
 
-	waiting_ = false;
+	mpi_data_.waiting_ = false;
 }
 
 //==============================================================================
 
 void MP_LAMP::Search() {
-	TreeSearchData* treesearch_data_ = new TreeSearchData(node_stack_, d_, g_,
-			bsh_, &log_, timer_);
+	TreeSearchData* treesearch_data_ = new TreeSearchData(node_stack_,
+			give_stack_, &stealer_, itemset_buf_, sup_buf_, child_sup_buf_, d_,
+			g_, bsh_, &log_, timer_);
+	ParallelPatternMining* psearch = new ParallelPatternMining(d_, g_, bsh_,
+			mpi_data_, treesearch_data_, &log_, timer_);
 	GetMinSupData* getminsup_data_;
 	GetTestableData* gettestable_data_;
 	GetSignificantData* getsignificant_data_;
@@ -1121,16 +1127,17 @@ void MP_LAMP::Search() {
 						<< (timer_->Elapsed() - log_.d_.search_start_time_)
 								/ GIGA << std::endl
 				;);
-		getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_);
-//		getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_,
-//				dtd_accum_array_base_, accum_array_, dtd_accum_recv_base_,
-//				accum_recv_); // The name Phase1 is already so nonsense...
-		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
+//		getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_);
+		getminsup_data_ = new GetMinSupData(lambda_max_, lambda_, cs_thr_,
+				dtd_accum_array_base_, accum_array_, dtd_accum_recv_base_,
+				accum_recv_); // The name Phase1 is already so nonsense...
+		psearch->GetMinimalSupport(getminsup_data_);
+//		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
 		lambda_max_ = getminsup_data_->lambda_max_;
 		lambda_ = getminsup_data_->lambda_;
 		cs_thr_ = getminsup_data_->cs_thr_; // no needed? trickey.
-
-		// todo: reduce expand_num_
+//		delete psearch;
+				// todo: reduce expand_num_
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
 			std::cout << "# " << "1st phase end\n";
 			std::cout << "# " << "lambda=" << lambda_;
@@ -1220,12 +1227,16 @@ void MP_LAMP::Search() {
 				;);
 
 		sig_level_ = int_sig_lev;
-		gettestable_data_ = new GetTestableData(lambda_, freq_stack_, freq_map_,
-				sig_level_);
-		GetTestablePatterns(mpi_data_, treesearch_data_, gettestable_data_);
-		freq_stack_ = gettestable_data_->freq_stack_;
-		freq_map_ = gettestable_data_->freq_map_;
+		gettestable_data_ = new GetTestableData(lambda_, freq_stack_,
+				&freq_map_, sig_level_);
+
+		psearch->GetTestablePatterns(gettestable_data_);
+//		GetTestablePatterns(mpi_data_, treesearch_data_, gettestable_data_);
+//		freq_stack_ = gettestable_data_->freq_stack_; // No need: two are the same.
+		//		freq_map_ = gettestable_data_->freq_map_; // No need?
 		sig_level_ = gettestable_data_->sig_level_;
+		assert(freq_stack_ == gettestable_data_->freq_stack_);
+		assert(freq_map_.size() == gettestable_data_->freq_map_->size());
 	}
 
 	DBG(D(1) << "closed_set_num=" << closed_set_num_ << std::endl
@@ -1286,8 +1297,10 @@ void MP_LAMP::Search() {
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
 	{
-		getsignificant_data_ = new GetSignificantData();
-		GetSignificantPatterns(mpi_data_, getsignificant_data_);
+		getsignificant_data_ = new GetSignificantData(freq_stack_, &freq_map_,
+				final_sig_level_, significant_stack_, &significant_set_);
+//		GetSignificantPatterns(mpi_data_, getsignificant_data_);
+		psearch->GetSignificantPatterns(mpi_data_, getsignificant_data_);
 		// TODO: put back to global variables.
 	}
 
@@ -1319,302 +1332,12 @@ void MP_LAMP::Search() {
 	;);
 
 	//ClearTasks();
+	delete psearch;
+	delete treesearch_data_;
+	delete getminsup_data_;
+	delete gettestable_data_;
+	delete getsignificant_data_;
 }
-
-//void MP_LAMP::SearchStraw1() {
-//	log_.d_.search_start_time_ = timer_->Elapsed();
-//	total_expand_num_ = 0ll;
-//
-//	// --------
-//	// preprocess
-//	CheckPoint();
-//
-//	expand_num_ = 0ll;
-//	closed_set_num_ = 0ll;
-//
-//	lambda_ = 1;
-//
-//	{
-//		// push root state to stack
-//		int * root_itemset;
-//		node_stack_->PushPre();
-//		root_itemset = node_stack_->Top();
-//		node_stack_->SetSup(root_itemset, lambda_max_);
-//		node_stack_->PushPostNoSort();
-//	}
-//
-//	PreProcessRootNode();
-//	{
-//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-//			std::cout << "# " << "preprocess end\n";
-//			std::cout << "# " << "lambda=" << lambda_ << "\tcs_thr[lambda]="
-//					<< std::setw(16) << cs_thr_[lambda_];
-//			std::cout << "\tpmin_thr[lambda-1]=" << std::setw(12)
-//					<< d_->PMin(lambda_ - 1);
-//			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
-//
-//			<< "\telapsed_time="
-//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-//					<< std::endl;
-//		}
-//		DBG(D(2) << "---------------" << std::endl
-//		;);
-//		DBG(D(1) << "preprocess phase end" << std::endl
-//		;);
-//		DBG(D(2) << "---------------" << std::endl
-//		;);
-//		DBG(
-//				D(2) << "# " << "preprocess end\n" << "# " << "lambda="
-//						<< lambda_ << "\tcs_thr[lambda]=" << std::setw(16)
-//						<< cs_thr_[lambda_] << "\tpmin_thr[lambda-1]="
-//						<< std::setw(12) << d_->PMin(lambda_ - 1)
-//						<< "\tnum_expand=" << std::setw(12) << expand_num_
-//						<< "\telapsed_time="
-//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
-//								/ GIGA << std::endl
-//				;);
-//	}
-//
-//	// --------
-//	// prepare phase 1
-//	phase_ = 1;
-//	log_.StartPeriodicLog();
-//
-//	// for strawman
-//	stealer_.Finish();
-//	waiting_ = false;
-//
-//	{
-//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-//			std::cout << "# " << "1st phase start\n";
-//			std::cout << "# " << "lambda=" << lambda_
-//					<< "\tclosed_set_num[n>=lambda]=" << std::setw(12)
-//					<< accum_array_[lambda_] << "\tcs_thr[lambda]="
-//					<< std::setw(16) << cs_thr_[lambda_];
-//			std::cout << "\tpmin_thr[lambda-1]=" << std::setw(12)
-//					<< d_->PMin(lambda_ - 1);
-//			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
-//
-//			<< "\telapsed_time="
-//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-//					<< std::endl;
-//		}
-//		DBG(D(2) << "---------------" << std::endl
-//		;);
-//		DBG(D(1) << "1st phase start" << std::endl
-//		;);
-//		DBG(D(2) << "---------------" << std::endl
-//		;);
-//		DBG(
-//				D(2) << "lambda=" << lambda_ << "\tclosed_set_num[n>=lambda]="
-//						<< std::setw(12) << accum_array_[lambda_]
-//						<< "\tcs_thr[lambda]=" << std::setw(16)
-//						<< cs_thr_[lambda_] << "\tpmin_thr[lambda-1]="
-//						<< std::setw(12) << d_->PMin(lambda_ - 1)
-//						<< "\tnum_expand=" << std::setw(12) << expand_num_
-//						<< "\telapsed_time="
-//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
-//								/ GIGA << std::endl
-//				;);
-//
-//		MainLoopStraw1();
-//
-//		// todo: reduce expand_num_
-//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-//			std::cout << "# " << "1st phase end\n";
-//			std::cout << "# " << "lambda=" << lambda_;
-//			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
-//
-//			<< "\telapsed_time="
-//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-//					<< std::endl;
-//		}
-//		DBG(D(2) << "---------------" << std::endl
-//		;);
-//		DBG(D(1) << "1st phase end" << std::endl
-//		;);
-//		DBG(D(2) << "---------------" << std::endl
-//		;);
-//		DBG(
-//				D(2) << "lambda=" << lambda_ << "\tnum_expand=" << std::setw(12)
-//						<< expand_num_ << "\telapsed_time="
-//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
-//								/ GIGA << std::endl
-//				;);
-//	}
-//
-//	log_.d_.dtd_accum_phase_per_sec_ = (double) (log_.d_.dtd_accum_phase_num_)
-//			/ ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
-//
-//	// log_.d_.accum_phase_per_sec_ =
-//	//     log_.d_.accum_phase_num_ / ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
-//
-//	// --------
-//	// prepare phase 2
-//	phase_ = 2;
-//	//ClearTasks();
-//	CheckPoint();
-//
-//	// for strawman
-//	stealer_.Finish();
-//	waiting_ = false;
-//
-//	lambda_--;
-//	CallBcast(&lambda_, 1, MPI_INT);
-//	final_support_ = lambda_;
-//
-//	if (!FLAGS_second_phase) {
-//		log_.d_.search_finish_time_ = timer_->Elapsed();
-//		log_.GatherLog(mpi_data_.nTotalProc_);
-//		DBG(D(1) << "log" << std::endl
-//		;);
-//		DBG(PrintLog(D(1, false))
-//		;);
-//		DBG(PrintPLog(D(1, false))
-//		;);
-//		return;
-//	}
-//
-//	expand_num_ = 0ll;
-//	closed_set_num_ = 0ll;
-//
-//	//if (h_ == 0) // pushing to all rank
-//	{
-//		// push root state to stack
-//		int * root_itemset;
-//		node_stack_->Clear();
-//		node_stack_->PushPre();
-//		root_itemset = node_stack_->Top();
-//		node_stack_->SetSup(root_itemset, lambda_max_);
-//		node_stack_->PushPostNoSort();
-//	}
-//
-//	double int_sig_lev = 0.0;
-//	if (mpi_data_.mpiRank_ == 0)
-//		int_sig_lev = GetInterimSigLevel(lambda_);
-//	// bcast int_sig_lev
-//	CallBcast(&int_sig_lev, 1, MPI_DOUBLE);
-//
-//	// todo: reduce expand_num_
-//
-//	{
-//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-//			std::cout << "# " << "2nd phase start\n";
-//			std::cout << "# " << "lambda=" << lambda_ << "\tint_sig_lev="
-//					<< int_sig_lev << "\telapsed_time="
-//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-//					<< std::endl;
-//		}
-//		DBG(D(2) << "---------------" << std::endl
-//		;);
-//		DBG(D(1) << "2nd phase start" << std::endl
-//		;);
-//		DBG(D(2) << "---------------" << std::endl
-//		;);
-//		DBG(
-//				D(2) << "lambda=" << lambda_ << "\tint_sig_lev=" << int_sig_lev
-//						<< "\telapsed_time="
-//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
-//								/ GIGA << std::endl
-//				;);
-//
-//		sig_level_ = int_sig_lev;
-//		MainLoopStraw1();
-//	}
-//
-//	DBG(D(1) << "closed_set_num=" << closed_set_num_ << std::endl
-//	;);
-//
-//	long long int closed_set_num_reduced;
-//	MPI_Reduce(&closed_set_num_, &closed_set_num_reduced, 1, MPI_LONG_LONG_INT,
-//	MPI_SUM, 0, MPI_COMM_WORLD);
-//
-//	DBG(if (mpi_data_.mpiRank_ == 0)
-//		D(1) << "closed_set_num_reduced=" << closed_set_num_reduced << std::endl
-//		;);
-//	if (mpi_data_.mpiRank_ == 0)
-//		final_closed_set_num_ = closed_set_num_reduced;
-//
-//	log_.d_.dtd_phase_per_sec_ = (double) (log_.d_.dtd_phase_num_)
-//			/ ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
-//
-//	MPI_Barrier( MPI_COMM_WORLD);
-//	log_.FinishPeriodicLog();
-//
-//	// todo: gather logs
-//
-//	{
-//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-//			std::cout << "# " << "2nd phase end\n";
-//			std::cout << "# " << "closed_set_num=" << std::setw(12)
-//					<< final_closed_set_num_ << "\tsig_lev="
-//					<< (FLAGS_a / final_closed_set_num_) << "\tnum_expand="
-//					<< std::setw(12) << expand_num_ << "\telapsed_time="
-//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-//					<< std::endl;
-//		}
-//	}
-//
-//	if (!FLAGS_third_phase) {
-//		log_.d_.search_finish_time_ = timer_->Elapsed();
-//		log_.GatherLog(mpi_data_.nTotalProc_);
-//		DBG(D(1) << "log" << std::endl
-//		;);
-//		DBG(PrintLog(D(1, false))
-//		;);
-//		DBG(PrintPLog(D(1, false))
-//		;);
-//		return;
-//	}
-//
-//	// prepare 3rd phase
-//	phase_ = 3;
-//	//ClearTasks();
-//	CheckPoint(); // needed for reseting dtd_.terminated_
-//
-//	if (node_stack_)
-//		delete node_stack_;
-//	node_stack_ = NULL;
-//	significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max);
-//	// significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
-//
-//	final_sig_level_ = FLAGS_a / final_closed_set_num_;
-//	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
-//
-//	{
-//		MainLoopStraw1();
-//	}
-//
-//	// implement this in main loop
-//	// copy only significant itemset to buffer
-//	// collect itemset
-//	//   can reuse the other stack (needs to compute pval again)
-//	//   or prepare simpler data structure
-//	if (mpi_data_.mpiRank_ == 0)
-//		SortSignificantSets();
-//	log_.d_.search_finish_time_ = timer_->Elapsed();
-//	MPI_Barrier( MPI_COMM_WORLD);
-//
-//	{
-//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-//			std::cout << "# " << "3rd phase end\n";
-//			std::cout << "# " << "sig_lev=" << final_sig_level_
-//					<< "\telapsed_time="
-//					<< (log_.d_.search_finish_time_ - log_.d_.search_start_time_)
-//							/ GIGA << std::endl;
-//		}
-//	}
-//
-//	log_.GatherLog(mpi_data_.nTotalProc_);
-//	DBG(D(1) << "log" << std::endl
-//	;);
-//	DBG(PrintLog(D(1, false))
-//	;);
-//	DBG(PrintPLog(D(1, false))
-//	;);
-//
-//	//ClearTasks();
-//}
 
 bool MP_LAMP::CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 		long long int start_time) {
@@ -1905,7 +1628,7 @@ bool MP_LAMP::ProcessNode(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 									item);
 							gettestable_data->freq_stack_->PushPostNoSort();
 
-							gettestable_data->freq_map_.insert(
+							gettestable_data->freq_map_->insert(
 									std::pair<double, int*>(pval, item));
 						}
 					}
@@ -2031,7 +1754,7 @@ void MP_LAMP::RecvReject(MPI_Data& mpi_data, int src) {
 			;);
 
 	stealer_.ResetRequesting();
-	waiting_ = false;
+	mpi_data_.waiting_ = false;
 }
 
 void MP_LAMP::SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
@@ -2099,9 +1822,10 @@ void MP_LAMP::RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 
 	DBG(
 			D(2) << "RecvGive: src=" << src << "\ttimezone="
-					<< mpi_data.dtd_->time_zone_ << "\tlfl=" << flag << "\tsize="
-					<< count << "\tnode=" << (new_nu_itemset - orig_nu_itemset)
-					<< "\tdtd_count=" << mpi_data.dtd_->count_ << std::endl
+					<< mpi_data.dtd_->time_zone_ << "\tlfl=" << flag
+					<< "\tsize=" << count << "\tnode="
+					<< (new_nu_itemset - orig_nu_itemset) << "\tdtd_count="
+					<< mpi_data.dtd_->count_ << std::endl
 			;);
 
 	give_stack_->Clear();
@@ -2118,7 +1842,7 @@ void MP_LAMP::RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 	stealer_.ResetCounters();
 	stealer_.SetState(StealState::RANDOM);
 	stealer_.SetStealStart();
-	waiting_ = false;
+	mpi_data_.waiting_ = false;
 }
 
 void MP_LAMP::SendLambda(MPI_Data& mpi_data, int lambda) {
@@ -2563,212 +2287,110 @@ void MP_LAMP::Steal(MPI_Data& mpi_data) {
 //}
 
 // mainloop
-void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data, GetMinSupData* getminsup_data) {
-	phase_ = 1;
-	DBG(D(1) << "MainLoop" << std::endl
-	;);
-	while (!mpi_data.dtd_->terminated_) {
-		while (!mpi_data.dtd_->terminated_) {
-			if (ProcessNode(mpi_data, treesearch_data, getminsup_data,
-					(GetTestableData*) NULL)) {
-				log_.d_.node_stack_max_itm_ =
-						std::max(log_.d_.node_stack_max_itm_,
-								(long long int) (treesearch_data->node_stack_->NuItemset()));
-				log_.d_.node_stack_max_cap_ =
-						std::max(log_.d_.node_stack_max_cap_,
-								(long long int) (treesearch_data->node_stack_->UsedCapacity()));
-				Probe(mpi_data, treesearch_data);
-				if (mpi_data.dtd_->terminated_)
-					break;
-				Distribute(mpi_data, treesearch_data);
-				Reject(mpi_data); // distribute finished, reject remaining requests
-				if (mpi_data.mpiRank_ == 0)
-					CheckCSThreshold(mpi_data);
-			} else
-				break;
-		}
-		if (mpi_data.dtd_->terminated_)
-			break;
-
-		log_.idle_start_ = timer_->Elapsed();
-		Reject(mpi_data); // node_stack_ empty. reject requests
-		Steal(mpi_data); // request steal
-		if (mpi_data.dtd_->terminated_) {
-			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-			break;
-		}
-
-		Probe(mpi_data, treesearch_data);
-		if (mpi_data.dtd_->terminated_) {
-			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-			break;
-		}
-		if (mpi_data.mpiRank_ == 0)
-			CheckCSThreshold(mpi_data);
-		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-	}
-
-}
-
-void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data, GetTestableData* gettestable_data) {
-	phase_ = 2;
-	DBG(D(1) << "MainLoop" << std::endl
-	;);
-	while (!mpi_data.dtd_->terminated_) {
-		while (!mpi_data.dtd_->terminated_) {
-			if (ProcessNode(mpi_data, treesearch_data, (GetMinSupData*) NULL,
-					gettestable_data)) {
-				log_.d_.node_stack_max_itm_ = std::max(
-						log_.d_.node_stack_max_itm_,
-						(long long int) (node_stack_->NuItemset()));
-				log_.d_.node_stack_max_cap_ = std::max(
-						log_.d_.node_stack_max_cap_,
-						(long long int) (node_stack_->UsedCapacity()));
-				Probe(mpi_data, treesearch_data);
-				if (mpi_data.dtd_->terminated_)
-					break;
-				Distribute(mpi_data, treesearch_data);
-				Reject(mpi_data); // distribute finished, reject remaining requests
-			} else
-				break;
-		}
-		if (mpi_data.dtd_->terminated_)
-			break;
-
-		log_.idle_start_ = timer_->Elapsed();
-		Reject(mpi_data); // node_stack_ empty. reject requests
-		Steal(mpi_data); // request steal
-		if (mpi_data.dtd_->terminated_) {
-			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-			break;
-		}
-
-		Probe(mpi_data, treesearch_data);
-		if (mpi_data.dtd_->terminated_) {
-			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-			break;
-		}
-
-		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-	}
-
-}
-
-void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data,
-		GetSignificantData* getsignificant_data) {
-	DBG(D(1) << "MainLoop" << std::endl
-	;);
-
-	ExtractSignificantSet();
-	if (mpi_data.mpiRank_ == 0)
-		SendResultRequest(mpi_data);
-
-	while (!mpi_data.dtd_->terminated_)
-		Probe(mpi_data, (TreeSearchData*) NULL);
-
-}
-
-//// mainloop
-//void MP_LAMP::MainLoop() {
+//void MP_LAMP::GetMinimalSupport(MPI_Data& mpi_data,
+//		TreeSearchData* treesearch_data, GetMinSupData* getminsup_data) {
+//	phase_ = 1;
 //	DBG(D(1) << "MainLoop" << std::endl
 //	;);
-//	if (phase_ == 1 || phase_ == 2) {
-//		while (!dtd_.terminated_) {
-//			while (!dtd_.terminated_) {
-//				if (ProcessNode(mpi_data.granularity_)) {
-//					log_.d_.node_stack_max_itm_ = std::max(
-//							log_.d_.node_stack_max_itm_,
-//							(long long int) (node_stack_->NuItemset()));
-//					log_.d_.node_stack_max_cap_ = std::max(
-//							log_.d_.node_stack_max_cap_,
-//							(long long int) (node_stack_->UsedCapacity()));
-//					Probe();
-//					if (dtd_.terminated_)
-//						break;
-//					Distribute();
-//					Reject(); // distribute finished, reject remaining requests
-//					if (mpi_data.mpiRank_ == 0 && phase_ == 1)
-//						CheckCSThreshold();
-//				} else
+//	while (!mpi_data.dtd_->terminated_) {
+//		while (!mpi_data.dtd_->terminated_) {
+//			if (ProcessNode(mpi_data, treesearch_data, getminsup_data,
+//					(GetTestableData*) NULL)) {
+//				log_.d_.node_stack_max_itm_ =
+//						std::max(log_.d_.node_stack_max_itm_,
+//								(long long int) (treesearch_data->node_stack_->NuItemset()));
+//				log_.d_.node_stack_max_cap_ =
+//						std::max(log_.d_.node_stack_max_cap_,
+//								(long long int) (treesearch_data->node_stack_->UsedCapacity()));
+//				Probe(mpi_data, treesearch_data);
+//				if (mpi_data.dtd_->terminated_)
 //					break;
-//			}
-//			if (dtd_.terminated_)
+//				Distribute(mpi_data, treesearch_data);
+//				Reject(mpi_data); // distribute finished, reject remaining requests
+//				if (mpi_data.mpiRank_ == 0)
+//					CheckCSThreshold(mpi_data);
+//			} else
 //				break;
-//
-//			log_.idle_start_ = timer_->Elapsed();
-//			Reject(); // node_stack_ empty. reject requests
-//			Steal(); // request steal
-//			if (dtd_.terminated_) {
-//				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-//				break;
-//			}
-//
-//			Probe();
-//			if (dtd_.terminated_) {
-//				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-//				break;
-//			}
-//			if (mpi_data.mpiRank_ == 0 && phase_ == 1)
-//				CheckCSThreshold();
-//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 //		}
-//	} else if (phase_ == 3) {
-//		ExtractSignificantSet();
-//		if (mpi_data.mpiRank_ == 0)
-//			SendResultRequest();
+//		if (mpi_data.dtd_->terminated_)
+//			break;
 //
-//		while (!dtd_.terminated_)
-//			Probe();
+//		log_.idle_start_ = timer_->Elapsed();
+//		Reject(mpi_data); // node_stack_ empty. reject requests
+//		Steal(mpi_data); // request steal
+//		if (mpi_data.dtd_->terminated_) {
+//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//			break;
+//		}
+//
+//		Probe(mpi_data, treesearch_data);
+//		if (mpi_data.dtd_->terminated_) {
+//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//			break;
+//		}
+//		if (mpi_data.mpiRank_ == 0)
+//			CheckCSThreshold(mpi_data);
+//		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 //	}
 //
 //}
-
-// mainloop for straw man 1
-//void MP_LAMP::MainLoopStraw1() {
+//
+//void MP_LAMP::GetTestablePatterns(MPI_Data& mpi_data,
+//		TreeSearchData* treesearch_data, GetTestableData* gettestable_data) {
+//	phase_ = 2;
 //	DBG(D(1) << "MainLoop" << std::endl
 //	;);
-//	if (phase_ == 1 || phase_ == 2) {
-//		while (!dtd_.terminated_) {
-//			while (!dtd_.terminated_) {
-//				if (ProcessNodeStraw1(mpi_data.granularity_)) {
-//					log_.d_.node_stack_max_itm_ = std::max(
-//							log_.d_.node_stack_max_itm_,
-//							(long long int) (node_stack_->NuItemset()));
-//					log_.d_.node_stack_max_cap_ = std::max(
-//							log_.d_.node_stack_max_cap_,
-//							(long long int) (node_stack_->UsedCapacity()));
-//					Probe();
-//					if (dtd_.terminated_)
-//						break;
-//					if (mpi_data.mpiRank_ == 0 && phase_ == 1)
-//						CheckCSThreshold();
-//				} else
+//	while (!mpi_data.dtd_->terminated_) {
+//		while (!mpi_data.dtd_->terminated_) {
+//			if (ProcessNode(mpi_data, treesearch_data, (GetMinSupData*) NULL,
+//					gettestable_data)) {
+//				log_.d_.node_stack_max_itm_ = std::max(
+//						log_.d_.node_stack_max_itm_,
+//						(long long int) (node_stack_->NuItemset()));
+//				log_.d_.node_stack_max_cap_ = std::max(
+//						log_.d_.node_stack_max_cap_,
+//						(long long int) (node_stack_->UsedCapacity()));
+//				Probe(mpi_data, treesearch_data);
+//				if (mpi_data.dtd_->terminated_)
 //					break;
-//			}
-//			if (dtd_.terminated_)
+//				Distribute(mpi_data, treesearch_data);
+//				Reject(mpi_data); // distribute finished, reject remaining requests
+//			} else
 //				break;
-//
-//			log_.idle_start_ = timer_->Elapsed();
-//
-//			Probe();
-//			if (dtd_.terminated_) {
-//				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
-//				break;
-//			}
-//			if (mpi_data.mpiRank_ == 0 && phase_ == 1)
-//				CheckCSThreshold();
-//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 //		}
-//	} else if (phase_ == 3) {
-//		ExtractSignificantSet();
-//		if (mpi_data.mpiRank_ == 0)
-//			SendResultRequest();
+//		if (mpi_data.dtd_->terminated_)
+//			break;
 //
-//		while (!dtd_.terminated_)
-//			Probe();
+//		log_.idle_start_ = timer_->Elapsed();
+//		Reject(mpi_data); // node_stack_ empty. reject requests
+//		Steal(mpi_data); // request steal
+//		if (mpi_data.dtd_->terminated_) {
+//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//			break;
+//		}
+//
+//		Probe(mpi_data, treesearch_data);
+//		if (mpi_data.dtd_->terminated_) {
+//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//			break;
+//		}
+//
+//		log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
 //	}
+//
+//}
+//
+//void MP_LAMP::GetSignificantPatterns(MPI_Data& mpi_data,
+//		GetSignificantData* getsignificant_data) {
+//	DBG(D(1) << "MainLoop" << std::endl
+//	;);
+//
+//	ExtractSignificantSet();
+//	if (mpi_data.mpiRank_ == 0)
+//		SendResultRequest(mpi_data);
+//
+//	while (!mpi_data.dtd_->terminated_)
+//		Probe(mpi_data, (TreeSearchData*) NULL);
 //
 //}
 
@@ -3631,8 +3253,405 @@ std::ostream& operator<<(std::ostream & out, const FixedSizeStack & st) {
 //	return true;
 //}
 
+//void MP_LAMP::SearchStraw1() {
+//	log_.d_.search_start_time_ = timer_->Elapsed();
+//	total_expand_num_ = 0ll;
+//
+//	// --------
+//	// preprocess
+//	CheckPoint();
+//
+//	expand_num_ = 0ll;
+//	closed_set_num_ = 0ll;
+//
+//	lambda_ = 1;
+//
+//	{
+//		// push root state to stack
+//		int * root_itemset;
+//		node_stack_->PushPre();
+//		root_itemset = node_stack_->Top();
+//		node_stack_->SetSup(root_itemset, lambda_max_);
+//		node_stack_->PushPostNoSort();
+//	}
+//
+//	PreProcessRootNode();
+//	{
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "preprocess end\n";
+//			std::cout << "# " << "lambda=" << lambda_ << "\tcs_thr[lambda]="
+//					<< std::setw(16) << cs_thr_[lambda_];
+//			std::cout << "\tpmin_thr[lambda-1]=" << std::setw(12)
+//					<< d_->PMin(lambda_ - 1);
+//			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
+//
+//			<< "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+//					<< std::endl;
+//		}
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(D(1) << "preprocess phase end" << std::endl
+//		;);
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(
+//				D(2) << "# " << "preprocess end\n" << "# " << "lambda="
+//						<< lambda_ << "\tcs_thr[lambda]=" << std::setw(16)
+//						<< cs_thr_[lambda_] << "\tpmin_thr[lambda-1]="
+//						<< std::setw(12) << d_->PMin(lambda_ - 1)
+//						<< "\tnum_expand=" << std::setw(12) << expand_num_
+//						<< "\telapsed_time="
+//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
+//								/ GIGA << std::endl
+//				;);
+//	}
+//
+//	// --------
+//	// prepare phase 1
+//	phase_ = 1;
+//	log_.StartPeriodicLog();
+//
+//	// for strawman
+//	stealer_.Finish();
+//	waiting_ = false;
+//
+//	{
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "1st phase start\n";
+//			std::cout << "# " << "lambda=" << lambda_
+//					<< "\tclosed_set_num[n>=lambda]=" << std::setw(12)
+//					<< accum_array_[lambda_] << "\tcs_thr[lambda]="
+//					<< std::setw(16) << cs_thr_[lambda_];
+//			std::cout << "\tpmin_thr[lambda-1]=" << std::setw(12)
+//					<< d_->PMin(lambda_ - 1);
+//			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
+//
+//			<< "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+//					<< std::endl;
+//		}
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(D(1) << "1st phase start" << std::endl
+//		;);
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(
+//				D(2) << "lambda=" << lambda_ << "\tclosed_set_num[n>=lambda]="
+//						<< std::setw(12) << accum_array_[lambda_]
+//						<< "\tcs_thr[lambda]=" << std::setw(16)
+//						<< cs_thr_[lambda_] << "\tpmin_thr[lambda-1]="
+//						<< std::setw(12) << d_->PMin(lambda_ - 1)
+//						<< "\tnum_expand=" << std::setw(12) << expand_num_
+//						<< "\telapsed_time="
+//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
+//								/ GIGA << std::endl
+//				;);
+//
+//		MainLoopStraw1();
+//
+//		// todo: reduce expand_num_
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "1st phase end\n";
+//			std::cout << "# " << "lambda=" << lambda_;
+//			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
+//
+//			<< "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+//					<< std::endl;
+//		}
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(D(1) << "1st phase end" << std::endl
+//		;);
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(
+//				D(2) << "lambda=" << lambda_ << "\tnum_expand=" << std::setw(12)
+//						<< expand_num_ << "\telapsed_time="
+//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
+//								/ GIGA << std::endl
+//				;);
+//	}
+//
+//	log_.d_.dtd_accum_phase_per_sec_ = (double) (log_.d_.dtd_accum_phase_num_)
+//			/ ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
+//
+//	// log_.d_.accum_phase_per_sec_ =
+//	//     log_.d_.accum_phase_num_ / ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
+//
+//	// --------
+//	// prepare phase 2
+//	phase_ = 2;
+//	//ClearTasks();
+//	CheckPoint();
+//
+//	// for strawman
+//	stealer_.Finish();
+//	waiting_ = false;
+//
+//	lambda_--;
+//	CallBcast(&lambda_, 1, MPI_INT);
+//	final_support_ = lambda_;
+//
+//	if (!FLAGS_second_phase) {
+//		log_.d_.search_finish_time_ = timer_->Elapsed();
+//		log_.GatherLog(mpi_data_.nTotalProc_);
+//		DBG(D(1) << "log" << std::endl
+//		;);
+//		DBG(PrintLog(D(1, false))
+//		;);
+//		DBG(PrintPLog(D(1, false))
+//		;);
+//		return;
+//	}
+//
+//	expand_num_ = 0ll;
+//	closed_set_num_ = 0ll;
+//
+//	//if (h_ == 0) // pushing to all rank
+//	{
+//		// push root state to stack
+//		int * root_itemset;
+//		node_stack_->Clear();
+//		node_stack_->PushPre();
+//		root_itemset = node_stack_->Top();
+//		node_stack_->SetSup(root_itemset, lambda_max_);
+//		node_stack_->PushPostNoSort();
+//	}
+//
+//	double int_sig_lev = 0.0;
+//	if (mpi_data_.mpiRank_ == 0)
+//		int_sig_lev = GetInterimSigLevel(lambda_);
+//	// bcast int_sig_lev
+//	CallBcast(&int_sig_lev, 1, MPI_DOUBLE);
+//
+//	// todo: reduce expand_num_
+//
+//	{
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "2nd phase start\n";
+//			std::cout << "# " << "lambda=" << lambda_ << "\tint_sig_lev="
+//					<< int_sig_lev << "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+//					<< std::endl;
+//		}
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(D(1) << "2nd phase start" << std::endl
+//		;);
+//		DBG(D(2) << "---------------" << std::endl
+//		;);
+//		DBG(
+//				D(2) << "lambda=" << lambda_ << "\tint_sig_lev=" << int_sig_lev
+//						<< "\telapsed_time="
+//						<< (timer_->Elapsed() - log_.d_.search_start_time_)
+//								/ GIGA << std::endl
+//				;);
+//
+//		sig_level_ = int_sig_lev;
+//		MainLoopStraw1();
+//	}
+//
+//	DBG(D(1) << "closed_set_num=" << closed_set_num_ << std::endl
+//	;);
+//
+//	long long int closed_set_num_reduced;
+//	MPI_Reduce(&closed_set_num_, &closed_set_num_reduced, 1, MPI_LONG_LONG_INT,
+//	MPI_SUM, 0, MPI_COMM_WORLD);
+//
+//	DBG(if (mpi_data_.mpiRank_ == 0)
+//		D(1) << "closed_set_num_reduced=" << closed_set_num_reduced << std::endl
+//		;);
+//	if (mpi_data_.mpiRank_ == 0)
+//		final_closed_set_num_ = closed_set_num_reduced;
+//
+//	log_.d_.dtd_phase_per_sec_ = (double) (log_.d_.dtd_phase_num_)
+//			/ ((timer_->Elapsed() - log_.d_.search_start_time_) / GIGA);
+//
+//	MPI_Barrier( MPI_COMM_WORLD);
+//	log_.FinishPeriodicLog();
+//
+//	// todo: gather logs
+//
+//	{
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "2nd phase end\n";
+//			std::cout << "# " << "closed_set_num=" << std::setw(12)
+//					<< final_closed_set_num_ << "\tsig_lev="
+//					<< (FLAGS_a / final_closed_set_num_) << "\tnum_expand="
+//					<< std::setw(12) << expand_num_ << "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+//					<< std::endl;
+//		}
+//	}
+//
+//	if (!FLAGS_third_phase) {
+//		log_.d_.search_finish_time_ = timer_->Elapsed();
+//		log_.GatherLog(mpi_data_.nTotalProc_);
+//		DBG(D(1) << "log" << std::endl
+//		;);
+//		DBG(PrintLog(D(1, false))
+//		;);
+//		DBG(PrintPLog(D(1, false))
+//		;);
+//		return;
+//	}
+//
+//	// prepare 3rd phase
+//	phase_ = 3;
+//	//ClearTasks();
+//	CheckPoint(); // needed for reseting dtd_.terminated_
+//
+//	if (node_stack_)
+//		delete node_stack_;
+//	node_stack_ = NULL;
+//	significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max);
+//	// significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
+//
+//	final_sig_level_ = FLAGS_a / final_closed_set_num_;
+//	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
+//
+//	{
+//		MainLoopStraw1();
+//	}
+//
+//	// implement this in main loop
+//	// copy only significant itemset to buffer
+//	// collect itemset
+//	//   can reuse the other stack (needs to compute pval again)
+//	//   or prepare simpler data structure
+//	if (mpi_data_.mpiRank_ == 0)
+//		SortSignificantSets();
+//	log_.d_.search_finish_time_ = timer_->Elapsed();
+//	MPI_Barrier( MPI_COMM_WORLD);
+//
+//	{
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "3rd phase end\n";
+//			std::cout << "# " << "sig_lev=" << final_sig_level_
+//					<< "\telapsed_time="
+//					<< (log_.d_.search_finish_time_ - log_.d_.search_start_time_)
+//							/ GIGA << std::endl;
+//		}
+//	}
+//
+//	log_.GatherLog(mpi_data_.nTotalProc_);
+//	DBG(D(1) << "log" << std::endl
+//	;);
+//	DBG(PrintLog(D(1, false))
+//	;);
+//	DBG(PrintPLog(D(1, false))
+//	;);
+//
+//	//ClearTasks();
+//}
 
-} // namespace lamp_search
+//// mainloop
+//void MP_LAMP::MainLoop() {
+//	DBG(D(1) << "MainLoop" << std::endl
+//	;);
+//	if (phase_ == 1 || phase_ == 2) {
+//		while (!dtd_.terminated_) {
+//			while (!dtd_.terminated_) {
+//				if (ProcessNode(mpi_data.granularity_)) {
+//					log_.d_.node_stack_max_itm_ = std::max(
+//							log_.d_.node_stack_max_itm_,
+//							(long long int) (node_stack_->NuItemset()));
+//					log_.d_.node_stack_max_cap_ = std::max(
+//							log_.d_.node_stack_max_cap_,
+//							(long long int) (node_stack_->UsedCapacity()));
+//					Probe();
+//					if (dtd_.terminated_)
+//						break;
+//					Distribute();
+//					Reject(); // distribute finished, reject remaining requests
+//					if (mpi_data.mpiRank_ == 0 && phase_ == 1)
+//						CheckCSThreshold();
+//				} else
+//					break;
+//			}
+//			if (dtd_.terminated_)
+//				break;
+//
+//			log_.idle_start_ = timer_->Elapsed();
+//			Reject(); // node_stack_ empty. reject requests
+//			Steal(); // request steal
+//			if (dtd_.terminated_) {
+//				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//				break;
+//			}
+//
+//			Probe();
+//			if (dtd_.terminated_) {
+//				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//				break;
+//			}
+//			if (mpi_data.mpiRank_ == 0 && phase_ == 1)
+//				CheckCSThreshold();
+//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//		}
+//	} else if (phase_ == 3) {
+//		ExtractSignificantSet();
+//		if (mpi_data.mpiRank_ == 0)
+//			SendResultRequest();
+//
+//		while (!dtd_.terminated_)
+//			Probe();
+//	}
+//
+//}
+
+// mainloop for straw man 1
+//void MP_LAMP::MainLoopStraw1() {
+//	DBG(D(1) << "MainLoop" << std::endl
+//	;);
+//	if (phase_ == 1 || phase_ == 2) {
+//		while (!dtd_.terminated_) {
+//			while (!dtd_.terminated_) {
+//				if (ProcessNodeStraw1(mpi_data.granularity_)) {
+//					log_.d_.node_stack_max_itm_ = std::max(
+//							log_.d_.node_stack_max_itm_,
+//							(long long int) (node_stack_->NuItemset()));
+//					log_.d_.node_stack_max_cap_ = std::max(
+//							log_.d_.node_stack_max_cap_,
+//							(long long int) (node_stack_->UsedCapacity()));
+//					Probe();
+//					if (dtd_.terminated_)
+//						break;
+//					if (mpi_data.mpiRank_ == 0 && phase_ == 1)
+//						CheckCSThreshold();
+//				} else
+//					break;
+//			}
+//			if (dtd_.terminated_)
+//				break;
+//
+//			log_.idle_start_ = timer_->Elapsed();
+//
+//			Probe();
+//			if (dtd_.terminated_) {
+//				log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//				break;
+//			}
+//			if (mpi_data.mpiRank_ == 0 && phase_ == 1)
+//				CheckCSThreshold();
+//			log_.d_.idle_time_ += timer_->Elapsed() - log_.idle_start_;
+//		}
+//	} else if (phase_ == 3) {
+//		ExtractSignificantSet();
+//		if (mpi_data.mpiRank_ == 0)
+//			SendResultRequest();
+//
+//		while (!dtd_.terminated_)
+//			Probe();
+//	}
+//
+//}
+
+
+}// namespace lamp_search
 
 /* Local Variables:  */
 /* compile-command: "scons -u" */
