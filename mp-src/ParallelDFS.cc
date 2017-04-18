@@ -5,24 +5,24 @@
  *      Author: yuu
  */
 
-#include "ParallelSearch.h"
+#include "ParallelDFS.h"
 
 namespace lamp_search {
 
-const int ParallelSearch::k_echo_tree_branch = 3;
+const int ParallelDFS::k_echo_tree_branch = 3;
 
-ParallelSearch::ParallelSearch(MPI_Data& mpi_data,
+ParallelDFS::ParallelDFS(MPI_Data& mpi_data,
 		TreeSearchData* treesearch_data, Log* log, Timer* timer) :
 		mpi_data(mpi_data), treesearch_data(treesearch_data), log_(log), timer_(
 				timer) {
 
 }
 
-ParallelSearch::~ParallelSearch() {
+ParallelDFS::~ParallelDFS() {
 	// TODO Auto-generated destructor stub
 }
 
-void ParallelSearch::Search() {
+void ParallelDFS::Search() {
 	DBG(D(1) << "MainLoop" << std::endl
 			;);
 	while (!mpi_data.dtd_->terminated_) {
@@ -70,14 +70,14 @@ void ParallelSearch::Search() {
 
 //==============================================================================
 
-bool ParallelSearch::IsLeafInTopology(MPI_Data& mpi_data) const {
+bool ParallelDFS::IsLeafInTopology(MPI_Data& mpi_data) const {
 	for (int i = 0; i < k_echo_tree_branch; i++)
 		if (mpi_data.bcast_targets_[i] >= 0)
 			return false;
 	return true;
 }
 
-int ParallelSearch::CallIprobe(MPI_Status * status, int * src,
+int ParallelDFS::CallIprobe(MPI_Status * status, int * src,
 		int * tag) {
 	long long int start_time;
 	long long int end_time;
@@ -125,7 +125,7 @@ int ParallelSearch::CallIprobe(MPI_Status * status, int * src,
 	return flag;
 }
 
-int ParallelSearch::CallRecv(void * buffer, int data_count,
+int ParallelDFS::CallRecv(void * buffer, int data_count,
 		MPI_Datatype type, int src, int tag, MPI_Status * status) {
 	long long int start_time;
 	long long int end_time;
@@ -143,7 +143,7 @@ int ParallelSearch::CallRecv(void * buffer, int data_count,
 	return error;
 }
 
-int ParallelSearch::CallBsend(void * buffer, int data_count,
+int ParallelDFS::CallBsend(void * buffer, int data_count,
 		MPI_Datatype type, int dest, int tag) {
 //	assert(0 <= dest && dest < mpi_data.nTotalProc_);
 	long long int start_time;
@@ -160,7 +160,7 @@ int ParallelSearch::CallBsend(void * buffer, int data_count,
 	return error;
 }
 
-int ParallelSearch::CallBcast(void * buffer, int data_count,
+int ParallelDFS::CallBcast(void * buffer, int data_count,
 		MPI_Datatype type) {
 	long long int start_time;
 	long long int end_time;
@@ -177,9 +177,9 @@ int ParallelSearch::CallBcast(void * buffer, int data_count,
 }
 
 
-std::ofstream ParallelSearch::null_stream_;
+std::ofstream ParallelDFS::null_stream_;
 
-std::ostream& ParallelSearch::D(int level, bool show_phase) {
+std::ostream& ParallelDFS::D(int level, bool show_phase) {
 	return null_stream_;
 //	bool FLAGS_d = true;
 //	if (FLAGS_d == 0)

@@ -5,8 +5,8 @@
  *      Author: yuu
  */
 
-#ifndef MP_SRC_PARALLELSEARCH_H_
-#define MP_SRC_PARALLELSEARCH_H_
+#ifndef MP_SRC_PARALLELDFS_H_
+#define MP_SRC_PARALLELDFS_H_
 
 #include "../src/variable_length_itemset.h"
 #include "MPI_Data.h"
@@ -17,11 +17,11 @@ namespace lamp_search {
 /*
  * TODO: Should Extract more fields here.
  */
-class ParallelSearch {
+class ParallelDFS {
 public:
-	ParallelSearch(MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
+	ParallelDFS(MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
 			Timer* timer);
-	virtual ~ParallelSearch();
+	virtual ~ParallelDFS();
 	virtual void Search();
 
 protected:
@@ -70,4 +70,4 @@ protected:
 
 } /* namespace lamp_search */
 
-#endif /* MP_SRC_PARALLELSEARCH_H_ */
+#endif /* MP_SRC_PARALLELDFS_H_ */

@@ -39,7 +39,7 @@ ParallelPatternMining::ParallelPatternMining(Database<uint64> * d_,
 		LampGraph<uint64> * g_, VariableBitsetHelper<uint64> * bsh_,
 		MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
 		Timer* timer) :
-		ParallelSearch(mpi_data, treesearch_data, log, timer), d_(d_), g_(g_), bsh_(
+		ParallelDFS(mpi_data, treesearch_data, log, timer), d_(d_), g_(g_), bsh_(
 				bsh_), expand_num_(0), closed_set_num_(0), phase_(0), getminsup_data(
 		NULL), gettestable_data(NULL) {
 
@@ -243,7 +243,8 @@ bool ParallelPatternMining::Probe(MPI_Data& mpi_data,
 				D(4) << "CallIprobe returned src=" << probe_src << "\ttag="
 						<< probe_tag << std::endl
 				;);
-		ProbeExecute(mpi_data, treesearch_data, &probe_status, probe_src, probe_tag);
+		ProbeExecute(mpi_data, treesearch_data, &probe_status, probe_src,
+				probe_tag);
 	}
 
 	// capacity, lambda, phase
@@ -284,6 +285,11 @@ bool ParallelPatternMining::Probe(MPI_Data& mpi_data,
 bool ParallelPatternMining::ProbeExecute(MPI_Data& mpi_data,
 		TreeSearchData* treesearch_data, MPI_Status* probe_status,
 		int probe_src, int probe_tag) {
+//	if (ParallelSearch::ProbeExecute(mpi_data, XX)) {
+//		return true;
+//	}
+
+
 	switch (probe_tag) {
 	// control tasks
 	case Tag::DTD_REQUEST:
@@ -308,15 +314,6 @@ bool ParallelPatternMining::ProbeExecute(MPI_Data& mpi_data,
 		break;
 
 		/**
-		 * SIGNIFICANTSET
-		 */
-	case Tag::RESULT_REQUEST:
-		RecvResultRequest(mpi_data, probe_src);
-		break;
-	case Tag::RESULT_REPLY:
-		RecvResultReply(mpi_data, probe_src, *probe_status);
-		break;
-		/**
 		 * MINIMALSUPPORT
 		 */
 	case Tag::DTD_ACCUM_REQUEST:
@@ -331,6 +328,17 @@ bool ParallelPatternMining::ProbeExecute(MPI_Data& mpi_data,
 		assert(phase_ == 1);
 		RecvLambda(mpi_data, probe_src);
 		break;
+
+		/**
+		 * SIGNIFICANTSET
+		 */
+	case Tag::RESULT_REQUEST:
+		RecvResultRequest(mpi_data, probe_src);
+		break;
+	case Tag::RESULT_REPLY:
+		RecvResultReply(mpi_data, probe_src, *probe_status);
+		break;
+
 	default:
 		printf("NOT A STANDARD TAG\n");
 		DBG(
@@ -1207,109 +1215,6 @@ void ParallelPatternMining::RecvGive(MPI_Data& mpi_data,
 	mpi_data.waiting_ = false;
 }
 
-//==============================================================================
-//
-//void ParallelSearch::SendResultRequest(MPI_Data& mpi_data) {
-//	int message[1];
-//	message[0] = 1; // dummy
-//
-//	mpi_data.echo_waiting_ = true;
-//
-//	for (int i = 0; i < k_echo_tree_branch; i++) {
-//		if (mpi_data.bcast_targets_[i] < 0)
-//			break;
-//
-//		assert(
-//				mpi_data.bcast_targets_[i] < mpi_data.nTotalProc_
-//						&& "SendResultRequest");
-//		CallBsend(message, 1, MPI_INT, mpi_data.bcast_targets_[i],
-//				Tag::RESULT_REQUEST);
-//		DBG(
-//				D(2) << "SendResultRequest: dst=" << mpi_data.bcast_targets_[i]
-//						<< std::endl
-//				;);
-//	}
-//}
-
-//void ParallelSearch::RecvResultRequest(MPI_Data& mpi_data, int src) {
-//	MPI_Status recv_status;
-//	int message[1];
-//	CallRecv(&message, 1, MPI_INT, src, Tag::RESULT_REQUEST, &recv_status);
-//	assert(src == recv_status.MPI_SOURCE);
-//
-//	DBG(D(2) << "RecvResultRequest: src=" << src << std::endl
-//	;);
-//
-//	if (IsLeafInTopology(mpi_data))
-//		SendResultReply(mpi_data);
-//	else
-//		SendResultRequest(mpi_data);
-//}
-//
-//void ParallelSearch::SendResultReply(MPI_Data& mpi_data) {
-//	int * message = significant_stack_->Stack();
-//	int size = significant_stack_->UsedCapacity();
-//	assert(mpi_data.bcast_source_ < mpi_data.nTotalProc_ && "SendResultReply");
-//	CallBsend(message, size, MPI_INT, mpi_data.bcast_source_,
-//			Tag::RESULT_REPLY);
-//
-//	DBG(D(2) << "SendResultReply: dst=" << mpi_data.bcast_source_ << std::endl
-//	;);
-//	DBG(significant_stack_->PrintAll(D(3, false))
-//	;);
-//
-//	mpi_data.echo_waiting_ = false;
-//	mpi_data.dtd_->terminated_ = true;
-//}
-//
-//void ParallelSearch::RecvResultReply(MPI_Data& mpi_data, int src,
-//		MPI_Status probe_status) {
-//	int count;
-//	int error = MPI_Get_count(&probe_status, MPI_INT, &count);
-//	if (error != MPI_SUCCESS) {
-//		DBG(
-//				D(1) << "error in MPI_Get_count in RecvResultReply: " << error
-//						<< std::endl
-//				;);
-//		MPI_Abort(MPI_COMM_WORLD, 1);
-//	}
-//
-//	MPI_Status recv_status;
-//	CallRecv(give_stack_->Stack(), count, MPI_INT, src, Tag::RESULT_REPLY,
-//			&recv_status);
-//	assert(src == recv_status.MPI_SOURCE);
-//
-//	significant_stack_->MergeStack(
-//			give_stack_->Stack() + VariableLengthItemsetStack::SENTINEL + 1,
-//			count - VariableLengthItemsetStack::SENTINEL - 1);
-//	give_stack_->Clear();
-//
-//	DBG(D(2) << "RecvResultReply: src=" << src << std::endl
-//	;);
-//	DBG(significant_stack_->PrintAll(D(3, false))
-//	;);
-//
-//	// using the same flags as accum count, should be fixed
-//	bool flag = false;
-//	for (int i = 0; i < k_echo_tree_branch; i++) {
-//		if (mpi_data.bcast_targets_[i] == src) {
-//			flag = true;
-//			mpi_data.accum_flag_[i] = true;
-//			break;
-//		}
-//	}
-//	assert(flag);
-//
-//	if (AccumCountReady(mpi_data)) {
-//		if (mpi_data.mpiRank_ != 0) {
-//			SendResultReply(mpi_data);
-//		} else { // root
-//			mpi_data.echo_waiting_ = false;
-//			mpi_data.dtd_->terminated_ = true;
-//		}
-//	}
-//}
-
 /**
  * GetMinSup Functions
  *
@@ -1528,33 +1433,6 @@ void ParallelPatternMining::ExtractSignificantSet() {
 			break;
 	}
 }
-
-//void ParallelPatternMining::SortSignificantSets() {
-//	int * set = getsignificant_data->significant_stack_->FirstItemset();
-//
-//	while (set != NULL) {
-//		// calculate support from set
-//		bsh_->Set(treesearch_data->sup_buf_);
-//		{
-//			int n = getsignificant_data->significant_stack_->GetItemNum(set);
-//			for (int i = 0; i < n; i++) {
-//				int item = getsignificant_data->significant_stack_->GetNthItem(
-//						set, i);
-//				bsh_->And(d_->NthData(item), treesearch_data->sup_buf_);
-//			}
-//		}
-//
-//		int sup_num = bsh_->Count(treesearch_data->sup_buf_);
-//		int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
-//				treesearch_data->sup_buf_);
-//		double pval = d_->PVal(sup_num, pos_sup_num);
-//
-//		getsignificant_data->significant_set_->insert(
-//				SignificantSetResult(pval, set, sup_num, pos_sup_num,
-//						getsignificant_data->significant_stack_));
-//		set = getsignificant_data->significant_stack_->NextItemset(set);
-//	}
-//}
 
 void ParallelPatternMining::CheckInit() {
 	assert(mpi_data.echo_waiting_ == false);

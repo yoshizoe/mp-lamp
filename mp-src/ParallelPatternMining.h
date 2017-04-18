@@ -9,7 +9,7 @@
 #define MP_SRC_PARALLELPATTERNMINING_H_
 #include "MPI_Data.h"
 
-#include "ParallelSearch.h"
+#include "ParallelDFS.h"
 
 namespace lamp_search {
 
@@ -21,7 +21,7 @@ namespace lamp_search {
  *       - GetSignificantPatterns
  *       These functions should be factored out as subclasses.
  */
-class ParallelPatternMining: public ParallelSearch {
+class ParallelPatternMining: public ParallelDFS {
 public:
 	ParallelPatternMining(Database<uint64> * d_, LampGraph<uint64> * g_,
 			VariableBitsetHelper<uint64> * bsh_, MPI_Data& mpi_data,
@@ -36,6 +36,8 @@ public:
 			GetSignificantData* getsignificant_data);
 
 protected:
+	// TODO: How can we hide the dependency on those low level structures?
+	//       Let's try to understand the semantics of how these methods are used, and factor out.
 	/*
 	 * Domain graph
 	 */
