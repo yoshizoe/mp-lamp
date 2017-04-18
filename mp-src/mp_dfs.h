@@ -170,13 +170,13 @@ private:
 
 	double sig_level_; // initially set to 1. set to 0.05 (FLAGS_a) / cs_thr_[global_sup_thr_-1] // LAMP
 
-	void CheckCSThreshold(MPI_Data& mpi_data); // getMinSup
+//	void CheckCSThreshold(MPI_Data& mpi_data); // getMinSup
 //	void CheckCSThreshold(GetMinSupData* getminsup_data); // getMinSup
 
-	bool ExceedCsThr() const; // getMinSup
-	int NextLambdaThr() const; // getMinSup
-//	int NextLambdaThr(GetMinSupData* getminsup_data) const; // getMinSup
-	void IncCsAccum(int sup_num); // getMinSup
+//	bool ExceedCsThr() const; // getMinSup
+//	int NextLambdaThr() const; // getMinSup
+////	int NextLambdaThr(GetMinSupData* getminsup_data) const; // getMinSup
+//	void IncCsAccum(int sup_num); // getMinSup
 	double GetInterimSigLevel(int lambda) const; // LAMP
 
 	// cs_accum_array is int array of 0..lambda_max_ (size lambda_max_+1)
@@ -190,19 +190,20 @@ private:
 	// can be used for sending the timestamp counter
 	// long long int * cs_accum_array_base_; // int array of -1..lambda_max_ (size lambda_max_+2)
 
+	//	struct AccumArray {
+	//		AccumArray(long long int* dtd_pointer) :
+	//				dtd_accum_array_base_(dtd_pointer) {
+	//		}
+	//		long long int* getDTDAccumArrayBase() {
+	//			return dtd_accum_array_base_;
+	//		}
+	//		long long int* getAccumArray() {
+	//			return dtd_accum_array_base_ + 3;
+	//		}
+	//		long long int* dtd_accum_array_base_;
+	//	};
+
 	// 0: count, 1: time warp, 2: empty flag, 3--: array
-	struct AccumArray {
-		AccumArray(long long int* dtd_pointer) :
-				dtd_accum_array_base_(dtd_pointer) {
-		}
-		long long int* getDTDAccumArrayBase() {
-			return dtd_accum_array_base_;
-		}
-		long long int* getAccumArray() {
-			return dtd_accum_array_base_ + 3;
-		}
-		long long int* dtd_accum_array_base_;
-	};
 	long long int * dtd_accum_array_base_; // int array of [-3..lambda_max_] (size lambda_max_+4)
 // -3: count, -2: time warp, -1: empty flag, 0--: array
 	long long int * accum_array_; // int array of [0...lambda_max_] (size lambda_max_+1)
@@ -388,15 +389,15 @@ private:
 	double final_sig_level_;
 
 // true if bcast_targets_ are all -1
-	bool IsLeaf(MPI_Data& mpi_data) const;
-
-// return flag. if (flag), it is ready to receive
-	int CallIprobe(MPI_Status * status, int * count, int * src);
-
-	int CallRecv(void * buffer, int count, MPI_Datatype type, int src, int tag,
-			MPI_Status * status);
-	int CallBsend(void * buffer, int count_int, MPI_Datatype type, int dest,
-			int tag);
+//	bool IsLeaf(MPI_Data& mpi_data) const;
+//
+//// return flag. if (flag), it is ready to receive
+//	int CallIprobe(MPI_Status * status, int * count, int * src);
+//
+//	int CallRecv(void * buffer, int count, MPI_Datatype type, int src, int tag,
+//			MPI_Status * status);
+//	int CallBsend(void * buffer, int count_int, MPI_Datatype type, int dest,
+//			int tag);
 	int CallBcast(void * buffer, int data_count, MPI_Datatype type);
 // todo: implement call reduce, call gather
 
