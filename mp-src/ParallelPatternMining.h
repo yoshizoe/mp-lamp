@@ -75,6 +75,7 @@ protected:
 //	void Steal(MPI_Data& mpi_data);
 	void Check(MPI_Data& mpi_data);
 	bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data);
+	std::vector<int> GetChildren(bool is_root_node, int coreindex);
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 			long long int start_time);
 	/**
@@ -125,24 +126,6 @@ protected:
 //	void RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data, int src,
 //			MPI_Status status);
 
-	bool AccumCountReady(MPI_Data& mpi_data) const;
-
-	/**
-	 * Methods For GetSignificant
-	 */
-	void SendResultRequest(MPI_Data& mpi_data);
-	void RecvResultRequest(MPI_Data& mpi_data, int src);
-
-	void SendResultReply(MPI_Data& mpi_data);
-	void RecvResultReply(MPI_Data& mpi_data, int src, MPI_Status status);
-
-
-	/**
-	 * Basic operations
-	 *
-	 */
-// return flag. if (flag), it is ready to receive
-
 
 	/**
 	 * GetMinSup Functions
@@ -151,7 +134,6 @@ protected:
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendDTDAccumRequest(MPI_Data& mpi_data);
 	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
-
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendDTDAccumReply(MPI_Data& mpi_data);
 	void RecvDTDAccumReply(MPI_Data& mpi_data, int src);
@@ -163,11 +145,18 @@ protected:
 //	int NextLambdaThr(GetMinSupData* getminsup_data) const; // getMinSup
 	void IncCsAccum(int sup_num); // getMinSup
 
+
+	// TODO: These functions should be factored in Get
 	/**
-	 * GET SIGNIFICANT PATTERNS
-	 *
+	 * Methods For GetSignificant
 	 */
+	void SendResultRequest(MPI_Data& mpi_data);
+	void RecvResultRequest(MPI_Data& mpi_data, int src);
+	void SendResultReply(MPI_Data& mpi_data);
+	void RecvResultReply(MPI_Data& mpi_data, int src, MPI_Status status);
+	bool AccumCountReady(MPI_Data& mpi_data) const;
 	void ExtractSignificantSet();
+
 // insert pointer into significant_map_ (do not sort the stack itself)
 //	void SortSignificantSets();
 

@@ -613,6 +613,9 @@ void MP_LAMP::Search() {
 
 	// --------
 	// preprocess
+
+	// TODO: I am not a fan of CheckPoint procedure.
+	//       It is unclear WHY it is running and not sure WHAT and HOW it is working.
 	CheckPoint();
 
 	expand_num_ = 0ll;
@@ -621,6 +624,7 @@ void MP_LAMP::Search() {
 	lambda_ = 1;
 
 	{
+		// TODO: This should be a part of PreProcessRootNode method.
 		// push root state to stack
 		int * root_itemset;
 		node_stack_->PushPre();
@@ -632,6 +636,7 @@ void MP_LAMP::Search() {
 			dtd_accum_array_base_, accum_array_, dtd_accum_recv_base_,
 			accum_recv_); // The name Phase1 is already so nonsense...
 
+	// TODO: this should be a part of ::GetMinimalSupport.
 	psearch->PreProcessRootNode(getminsup_data_);
 	{
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
@@ -666,6 +671,7 @@ void MP_LAMP::Search() {
 
 	// --------
 	// prepare phase 1
+	// TODO: phase 1 should be started when PreProcessRootNode started.
 	phase_ = 1;
 	log_.StartPeriodicLog();
 
@@ -705,9 +711,9 @@ void MP_LAMP::Search() {
 //		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
 		lambda_max_ = getminsup_data_->lambda_max_;
 		lambda_ = getminsup_data_->lambda_;
-		cs_thr_ = getminsup_data_->cs_thr_; // no needed? trickey.
-//		delete psearch;
-				// todo: reduce expand_num_
+		assert(cs_thr_ == getminsup_data_->cs_thr_);
+
+		// todo: reduce expand_num_
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
 			std::cout << "# " << "1st phase end\n";
 			std::cout << "# " << "lambda=" << lambda_;
@@ -740,7 +746,7 @@ void MP_LAMP::Search() {
 	CheckPoint();
 
 	lambda_--;
-	CallBcast(&lambda_, 1, MPI_INT);
+	CallBcast(&lambda_, 1, MPI_INT); // Rank-0 process broadcasts its lambda to all the other processes
 	final_support_ = lambda_;
 
 	if (!FLAGS_second_phase) {

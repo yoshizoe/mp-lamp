@@ -207,8 +207,6 @@ void ParallelPatternMining::GetTestablePatterns(
 
 }
 
-//==============================================================================
-
 void ParallelPatternMining::GetSignificantPatterns(MPI_Data& mpi_data,
 		GetSignificantData* getsignificant_data) {
 	this->getsignificant_data = getsignificant_data;
@@ -225,6 +223,8 @@ void ParallelPatternMining::GetSignificantPatterns(MPI_Data& mpi_data,
 		Probe(mpi_data, treesearch_data);
 	}
 }
+
+//==============================================================================
 
 bool ParallelPatternMining::Probe(MPI_Data& mpi_data,
 		TreeSearchData* treesearch_data) {
@@ -317,13 +317,11 @@ void ParallelPatternMining::ProbeExecute(MPI_Data& mpi_data,
 		break;
 
 	default:
-//		printf("NOT A STANDARD TAG\n");
 		DBG(
 				D(1) << "unknown Tag for ParallelPatternMining=" << probe_tag
 						<< " received in Probe: " << std::endl
 				;
 		);
-//		MPI_Abort(MPI_COMM_WORLD, 1);
 		ParallelDFS::ProbeExecute(mpi_data, treesearch_data, probe_status,
 				probe_src, probe_tag);
 		break;
@@ -331,7 +329,9 @@ void ParallelPatternMining::ProbeExecute(MPI_Data& mpi_data,
 	return;
 }
 
-
+/**
+ * GetMinSup specific
+ */
 void ParallelPatternMining::Check(MPI_Data& mpi_data) {
 	if (mpi_data.mpiRank_ == 0 && phase_ == 1) {
 		CheckCSThreshold(mpi_data);
@@ -339,6 +339,7 @@ void ParallelPatternMining::Check(MPI_Data& mpi_data) {
 	return;
 }
 
+// TODO: What does it do after all?
 bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 		TreeSearchData* treesearch_data) {
 	if (treesearch_data->node_stack_->Empty())
@@ -382,6 +383,7 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 		int core_i = g_->CoreIndex(*treesearch_data->node_stack_,
 				treesearch_data->itemset_buf_);
 
+		// TODO: not sure what it is
 		int * ppc_ext_buf;
 // todo: use database reduction
 
@@ -396,21 +398,25 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 		int accum_period_counter_ = 0;
 // reverse order
 // for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
-		for (int new_item = d_->NextItemInReverseLoop(is_root_node,
-				mpi_data.mpiRank_, mpi_data.nTotalProc_, d_->NuItems());
-				new_item >= core_i + 1;
-				new_item = d_->NextItemInReverseLoop(is_root_node,
-						mpi_data.mpiRank_, mpi_data.nTotalProc_, new_item)) {
+		// TODO: this arcane for-loop is way too clumsy to understand.
+		//       Should enumarete items into a vector and then loop inside the vector, isn't it?
+		//       Or d_ should provide an interface to list all children at once.
+		//       CoreIndex is what I am not sure about.
+		std::vector<int> children = GetChildren(is_root_node, core_i);
+		for (std::vector<int>::iterator it = children.begin(); it != children.end(); ++it) {
+			int new_item = *it;
 			// skip existing item
 			// todo: improve speed here
 			if (treesearch_data->node_stack_->Exist(
 					treesearch_data->itemset_buf_, new_item))
 				continue;
 
+			// TODO: whatever this is trying to do, it should be factored into a function.
+			//       Why is it Probing while in the expansion loop?
 			{      // Periodic probe. (do in both phases)
 				accum_period_counter_++;
 				if (FLAGS_probe_period_is_ms_) {      // using milli second
-					if (accum_period_counter_ >= 64) {
+					if (accum_period_counter_ >= 64) { // TODO: what is this magic number?
 						// to avoid calling timer_ frequently, time is checked once in 64 loops
 						// clock_gettime takes 0.3--0.5 micro sec
 						accum_period_counter_ = 0;
@@ -449,6 +455,8 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 			int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
 					treesearch_data->child_sup_buf_);
 
+			// If the support is smaller than the required minimal support for
+			// significant pattern (=lambda), then prune it.
 			if (sup_num < getminsup_data->lambda_)
 				continue;
 
@@ -503,6 +511,7 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 				// because if sup_num of a node equals to sup_threshold, children will have smaller sup_num
 				// therefore no need to check it's children
 				// note: skipping node_stack_ full check. allocate enough memory!
+				// TODO: ???
 				if (sup_num <= getminsup_data->lambda_)
 					treesearch_data->node_stack_->Pop();
 			}
@@ -526,6 +535,17 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 	return true;
 }
 
+std::vector<int> ParallelPatternMining::GetChildren(bool is_root_node, int coreindex) {
+	std::vector<int> children;
+	for (int new_item = d_->NextItemInReverseLoop(is_root_node,
+			mpi_data.mpiRank_, mpi_data.nTotalProc_, d_->NuItems());
+			new_item >= coreindex + 1;
+			new_item = d_->NextItemInReverseLoop(is_root_node,
+					mpi_data.mpiRank_, mpi_data.nTotalProc_, new_item)) {
+		children.push_back(new_item);
+	}
+	return children;
+}
 bool ParallelPatternMining::CheckProcessNodeEnd(int n, bool n_is_ms,
 		int processed, long long int start_time) {
 	long long int elapsed_time;
@@ -910,18 +930,18 @@ void ParallelPatternMining::CheckInit() {
 
 // TODO: For debugging: Not sure how to show the caller in assert.
 void ParallelPatternMining::CheckInitTestable() {
-	mpi_data.lifeline_thieves_->Clear();
-	for (int pi = 0; pi < mpi_data.nTotalProc_; pi++) {
-		mpi_data.lifelines_activated_[pi] = false;
-	}
+//	mpi_data.lifeline_thieves_->Clear();
+//	for (int pi = 0; pi < mpi_data.nTotalProc_; pi++) {
+//		mpi_data.lifelines_activated_[pi] = false;
+//	}
 
 	assert(mpi_data.echo_waiting_ == false);
 	assert(mpi_data.waiting_ == false);
-	assert(mpi_data.thieves_->Size() == 0);
-	assert(mpi_data.lifeline_thieves_->Size() == 0);
-	for (int pi = 0; pi < mpi_data.nTotalProc_; pi++) {
-		assert(mpi_data.lifelines_activated_[pi] == false);
-	}
+//	assert(mpi_data.thieves_->Size() == 0);
+//	assert(mpi_data.lifeline_thieves_->Size() == 0);
+//	for (int pi = 0; pi < mpi_data.nTotalProc_; pi++) {
+//		assert(mpi_data.lifelines_activated_[pi] == false);
+//	}
 }
 
 } /* namespace lamp_search */

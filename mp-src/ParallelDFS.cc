@@ -751,6 +751,8 @@ int ParallelDFS::CallBcast(void * buffer, int data_count,
 
 std::ofstream ParallelDFS::null_stream_;
 
+// TODO: not sure how to use FLAGS. Is it transferrable?
+//       Is it global variable? Either way not sure the purpose of the package.
 std::ostream& ParallelDFS::D(int level, bool show_phase) {
 	return null_stream_;
 //	bool FLAGS_d = true;
