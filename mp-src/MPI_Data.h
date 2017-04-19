@@ -29,11 +29,11 @@ struct TreeSearchData {
 	TreeSearchData(VariableLengthItemsetStack * nstack,
 			VariableLengthItemsetStack * gstack, StealState* stealer_,
 			int* itemset_buf_, uint64* sup_buf_, uint64* child_sup_buf_,
-			Database<uint64> * d_, LampGraph<uint64> * g_,
+			Database<uint64> * d_,
 			VariableBitsetHelper<uint64> * bsh_, Log *log_, Timer * timer_) :
 			node_stack_(nstack), give_stack_(gstack), stealer_(stealer_), itemset_buf_(
 					itemset_buf_), sup_buf_(sup_buf_), child_sup_buf_(
-					child_sup_buf_), d_(d_), g_(g_), bsh_(bsh_), log_(log_), timer_(
+					child_sup_buf_), d_(d_), bsh_(bsh_), log_(log_), timer_(
 					timer_) {
 	}
 	// Search fields
@@ -41,16 +41,16 @@ struct TreeSearchData {
 	VariableLengthItemsetStack * give_stack_;
 	StealState* stealer_;
 	int* itemset_buf_;
-	uint64 * sup_buf_, *child_sup_buf_;
 
-	// Utils
+	// Utils // TODO: put in mpi_data
 	Log *log_;
 	Timer * timer_;
 
 	// TODO: these should be in Parallel Pattern Mining...
 	// Domain fields. TODO: Way to wacky to be dependent on these...
+	uint64 * sup_buf_, *child_sup_buf_;
 	Database<uint64> * d_;
-	LampGraph<uint64> * g_;
+//	LampGraph<uint64> * g_;
 	VariableBitsetHelper<uint64> * bsh_; // bitset helper
 };
 

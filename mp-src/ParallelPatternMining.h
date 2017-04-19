@@ -23,7 +23,7 @@ namespace lamp_search {
  */
 class ParallelPatternMining: public ParallelDFS {
 public:
-	ParallelPatternMining(Database<uint64> * d_, LampGraph<uint64> * g_,
+	ParallelPatternMining(Database<uint64> * d_,
 			VariableBitsetHelper<uint64> * bsh_, MPI_Data& mpi_data,
 			TreeSearchData* treesearch_data, Log* log, Timer* timer);
 	virtual ~ParallelPatternMining();
@@ -76,7 +76,7 @@ protected:
 	void ProcAfterProbe();
 	void Check(MPI_Data& mpi_data);
 	bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data);
-	std::vector<int> GetChildren(bool is_root_node, int coreindex);
+	std::vector<int> GetChildren(int core_i);
 	void CheckProbe(int accum_period_counter_, long long int lap_time);
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 			long long int start_time);

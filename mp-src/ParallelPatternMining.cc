@@ -36,17 +36,19 @@ DECLARE_bool(third_phase_); // true, "do third phase"
 namespace lamp_search {
 
 ParallelPatternMining::ParallelPatternMining(Database<uint64> * d_,
-		LampGraph<uint64> * g_, VariableBitsetHelper<uint64> * bsh_,
+		 VariableBitsetHelper<uint64> * bsh_,
 		MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
 		Timer* timer) :
-		ParallelDFS(mpi_data, treesearch_data, log, timer), d_(d_), g_(g_), bsh_(
+		ParallelDFS(mpi_data, treesearch_data, log, timer), d_(d_), bsh_(
 				bsh_), expand_num_(0), closed_set_num_(0), phase_(0), getminsup_data(
 		NULL), gettestable_data(NULL) {
-
+	g_ = new LampGraph<uint64>(*d_);
 }
 
 ParallelPatternMining::~ParallelPatternMining() {
 	// TODO: lots of things to delete
+	if(g_)
+		delete g_;
 }
 
 // TODO: This should be under GetMinimumSupport
@@ -357,8 +359,7 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 			}
 		}
 
-		int core_i = g_->CoreIndex(*treesearch_data->node_stack_,
-				treesearch_data->itemset_buf_);
+
 
 		// TODO: not sure what it is
 		int * ppc_ext_buf;
@@ -369,17 +370,15 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 						|| treesearch_data->node_stack_->GetItemNum(
 								treesearch_data->itemset_buf_) != 0);
 
-		bool is_root_node = (treesearch_data->node_stack_->GetItemNum(
-				treesearch_data->itemset_buf_) == 0);
 
 		int accum_period_counter_ = 0;
 // reverse order
 // for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
-		// TODO: this arcane for-loop is way too clumsy to understand.
-		//       Should enumarete items into a vector and then loop inside the vector, isn't it?
-		//       Or d_ should provide an interface to list all children at once.
+		// TODO: d_ should provide an interface to list all children at once.
 		//       CoreIndex is what I am not sure about.
-		std::vector<int> children = GetChildren(is_root_node, core_i);
+		int core_i = g_->CoreIndex(*treesearch_data->node_stack_,
+				treesearch_data->itemset_buf_);
+		std::vector<int> children = GetChildren(core_i);
 		for (std::vector<int>::iterator it = children.begin();
 				it != children.end(); ++it) {
 			int new_item = *it;
@@ -478,12 +477,14 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 	return true;
 }
 
-std::vector<int> ParallelPatternMining::GetChildren(bool is_root_node,
-		int coreindex) {
+std::vector<int> ParallelPatternMining::GetChildren(int core_i) {
+	bool is_root_node = (treesearch_data->node_stack_->GetItemNum(
+			treesearch_data->itemset_buf_) == 0);
+
 	std::vector<int> children;
 	for (int new_item = d_->NextItemInReverseLoop(is_root_node,
 			mpi_data.mpiRank_, mpi_data.nTotalProc_, d_->NuItems());
-			new_item >= coreindex + 1;
+			new_item >= core_i + 1;
 			new_item = d_->NextItemInReverseLoop(is_root_node,
 					mpi_data.mpiRank_, mpi_data.nTotalProc_, new_item)) {
 		children.push_back(new_item);

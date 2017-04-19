@@ -95,7 +95,7 @@ MP_LAMP::MP_LAMP(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
 		int m) :
 		dtd_(k_echo_tree_branch), mpi_data_(FLAGS_bsend_buffer_size, rank,
 				nu_proc, n, n_is_ms, w, l, m, k_echo_tree_branch, &dtd_), d_(
-		NULL), g_(NULL), bsh_(NULL), timer_(Timer::GetInstance()), dtd_accum_array_base_(
+		NULL),  bsh_(NULL), timer_(Timer::GetInstance()), dtd_accum_array_base_(
 		NULL), accum_array_(NULL), dtd_accum_recv_base_(NULL), accum_recv_(
 		NULL), give_stack_(NULL), stealer_(mpi_data_.nRandStealTrials_,
 				mpi_data_.hypercubeDimension_), phase_(0), sup_buf_(
@@ -232,8 +232,8 @@ MP_LAMP::~MP_LAMP() {
 
 	if (d_)
 		delete d_;
-	if (g_)
-		delete g_;
+//	if (g_)
+//		delete g_;
 
 	if (bsh_)
 		delete bsh_;
@@ -300,7 +300,7 @@ void MP_LAMP::InitDatabaseRoot(std::istream & is1, std::istream & is2) {
 			transaction_names);
 	log_.d_.pval_table_time_ = timer_->Elapsed() - start_time;
 
-	g_ = new LampGraph<uint64>(*d_);
+//	g_ = new LampGraph<uint64>(*d_);
 
 	// Lambda max is initially the number of total transactions in the database.
 	lambda_max_ = d_->MaxX(); // used for getMinSup
@@ -389,7 +389,7 @@ void MP_LAMP::InitDatabaseRoot(std::istream & is1, int posnum) {
 	d_ = new Database<uint64>(bsh_, data, nu_trans, nu_items, positive,
 			nu_pos_total, max_item_in_transaction, item_names,
 			transaction_names);
-	g_ = new LampGraph<uint64>(*d_);
+//	g_ = new LampGraph<uint64>(*d_);
 
 	lambda_max_ = d_->MaxX();
 	// D() << "max_x=lambda_max=" << lambda_max_ << std::endl;
@@ -467,7 +467,7 @@ void MP_LAMP::InitDatabaseSub(bool pos) {
 	d_ = new Database<uint64>(bsh_, data, nu_trans, nu_items, positive,
 			nu_pos_total, max_item_in_transaction,
 			NULL, NULL);
-	g_ = new LampGraph<uint64>(*d_);
+//	g_ = new LampGraph<uint64>(*d_);
 
 	lambda_max_ = d_->MaxX();
 // D() << "max_x=lambda_max=" << lambda_max_ << std::endl;
@@ -600,9 +600,8 @@ void MP_LAMP::ClearTasks() {
 
 void MP_LAMP::Search() {
 	TreeSearchData* treesearch_data_ = new TreeSearchData(node_stack_,
-			give_stack_, &stealer_, itemset_buf_, sup_buf_, child_sup_buf_, d_,
-			g_, bsh_, &log_, timer_);
-	ParallelPatternMining* psearch = new ParallelPatternMining(d_, g_, bsh_,
+			give_stack_, &stealer_, itemset_buf_, sup_buf_, child_sup_buf_, d_, bsh_, &log_, timer_);
+	ParallelPatternMining* psearch = new ParallelPatternMining(d_, bsh_,
 			mpi_data_, treesearch_data_, &log_, timer_);
 	GetMinSupData* getminsup_data_;
 	GetTestableData* gettestable_data_;

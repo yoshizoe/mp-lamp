@@ -145,7 +145,7 @@ private:
 
 //	{
 	Database<uint64> * d_;
-	LampGraph<uint64> * g_;
+//	LampGraph<uint64> * g_;
 	VariableBitsetHelper<uint64> * bsh_; // bitset helper
 //	}
 
