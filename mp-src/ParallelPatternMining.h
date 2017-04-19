@@ -23,8 +23,7 @@ namespace lamp_search {
  */
 class ParallelPatternMining: public ParallelDFS {
 public:
-	ParallelPatternMining(Database<uint64> * d_,
-			VariableBitsetHelper<uint64> * bsh_, MPI_Data& mpi_data,
+	ParallelPatternMining(BinaryPatternMiningData* bpm_data, MPI_Data& mpi_data,
 			TreeSearchData* treesearch_data, Log* log, Timer* timer);
 	virtual ~ParallelPatternMining();
 
@@ -44,7 +43,7 @@ protected:
 	Database<uint64> * d_;
 	LampGraph<uint64> * g_;
 	VariableBitsetHelper<uint64> * bsh_;
-
+	uint64 * sup_buf_, *child_sup_buf_;
 	/*
 	 * Data structure
 	 */

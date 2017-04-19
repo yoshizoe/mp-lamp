@@ -35,19 +35,20 @@ DECLARE_bool(third_phase_); // true, "do third phase"
 
 namespace lamp_search {
 
-ParallelPatternMining::ParallelPatternMining(Database<uint64> * d_,
-		 VariableBitsetHelper<uint64> * bsh_,
+ParallelPatternMining::ParallelPatternMining(BinaryPatternMiningData* bpm_data,
 		MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
 		Timer* timer) :
-		ParallelDFS(mpi_data, treesearch_data, log, timer), d_(d_), bsh_(
-				bsh_), expand_num_(0), closed_set_num_(0), phase_(0), getminsup_data(
+		ParallelDFS(mpi_data, treesearch_data, log, timer), d_(bpm_data->d_), bsh_(
+				bpm_data->bsh_), sup_buf_(bpm_data->sup_buf_), child_sup_buf_(
+				bpm_data->child_sup_buf_), expand_num_(0), closed_set_num_(0), phase_(
+				0), getminsup_data(
 		NULL), gettestable_data(NULL) {
-	g_ = new LampGraph<uint64>(*d_);
+	g_ = new LampGraph<uint64>(*d_); // No overhead to generate LampGraph.
 }
 
 ParallelPatternMining::~ParallelPatternMining() {
 	// TODO: lots of things to delete
-	if(g_)
+	if (g_)
 		delete g_;
 }
 
@@ -74,7 +75,7 @@ void ParallelPatternMining::PreProcessRootNode(GetMinSupData* getminsup_data) {
 	;);
 
 	// calculate support from itemset_buf_
-	bsh_->Set(treesearch_data->sup_buf_);
+	bsh_->Set(sup_buf_);
 	// skipping rest for root node
 
 	int core_i = g_->CoreIndex(*treesearch_data->node_stack_,
@@ -93,9 +94,9 @@ void ParallelPatternMining::PreProcessRootNode(GetMinSupData* getminsup_data) {
 					mpi_data.mpiRank_, mpi_data.nTotalProc_, new_item)) {
 		// skipping not needed because itemset_buf_ if root itemset
 
-		bsh_->Copy(treesearch_data->sup_buf_, treesearch_data->child_sup_buf_);
+		bsh_->Copy(sup_buf_, child_sup_buf_);
 		int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
-				treesearch_data->child_sup_buf_);
+				child_sup_buf_);
 
 		if (sup_num < getminsup_data->lambda_)
 			continue;
@@ -104,7 +105,7 @@ void ParallelPatternMining::PreProcessRootNode(GetMinSupData* getminsup_data) {
 		ppc_ext_buf = treesearch_data->node_stack_->Top();
 
 		bool res = g_->PPCExtension(treesearch_data->node_stack_,
-				treesearch_data->itemset_buf_, treesearch_data->child_sup_buf_,
+				treesearch_data->itemset_buf_, child_sup_buf_,
 				core_i, new_item, ppc_ext_buf);
 
 		treesearch_data->node_stack_->SetSup(ppc_ext_buf, sup_num);
@@ -150,9 +151,9 @@ void ParallelPatternMining::PreProcessRootNode(GetMinSupData* getminsup_data) {
 					mpi_data.mpiRank_, mpi_data.nTotalProc_, new_item)) {
 		// skipping not needed because itemset_buf_ if root itemset
 
-		bsh_->Copy(treesearch_data->sup_buf_, treesearch_data->child_sup_buf_);
+		bsh_->Copy(sup_buf_, child_sup_buf_);
 		int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
-				treesearch_data->child_sup_buf_);
+				child_sup_buf_);
 
 		if (sup_num < getminsup_data->lambda_)
 			continue;
@@ -161,7 +162,7 @@ void ParallelPatternMining::PreProcessRootNode(GetMinSupData* getminsup_data) {
 		ppc_ext_buf = treesearch_data->node_stack_->Top();
 
 		bool res = g_->PPCExtension(treesearch_data->node_stack_,
-				treesearch_data->itemset_buf_, treesearch_data->child_sup_buf_,
+				treesearch_data->itemset_buf_, child_sup_buf_,
 				core_i, new_item, ppc_ext_buf);
 
 		treesearch_data->node_stack_->SetSup(ppc_ext_buf, sup_num);
@@ -246,11 +247,11 @@ void ParallelPatternMining::ProcAfterProbe() {
 		// note: for phase_ 1, accum request and dtd request are unified
 		if (!mpi_data.echo_waiting_ && !mpi_data.dtd_->terminated_) {
 			if (phase_ == 1) {
-				SendDTDAccumRequest (mpi_data);
+				SendDTDAccumRequest(mpi_data);
 				// log_->d_.dtd_accum_request_num_++;
 			} else if (phase_ == 2) {
 				if (treesearch_data->node_stack_->Empty()) {
-					SendDTDRequest (mpi_data);
+					SendDTDRequest(mpi_data);
 					// log_->d_.dtd_request_num_++;
 				}
 			} else {
@@ -348,18 +349,16 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 
 // TODO: THIS SHIT IS DEPENDENT ON bsh_
 // calculate support from itemset_buf_
-		bsh_->Set(treesearch_data->sup_buf_);
+		bsh_->Set(sup_buf_);
 		{
 			int n = treesearch_data->node_stack_->GetItemNum(
 					treesearch_data->itemset_buf_);
 			for (int i = 0; i < n; i++) {
 				int item = treesearch_data->node_stack_->GetNthItem(
 						treesearch_data->itemset_buf_, i);
-				bsh_->And(d_->NthData(item), treesearch_data->sup_buf_);
+				bsh_->And(d_->NthData(item), sup_buf_);
 			}
 		}
-
-
 
 		// TODO: not sure what it is
 		int * ppc_ext_buf;
@@ -369,7 +368,6 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 				phase_ != 1
 						|| treesearch_data->node_stack_->GetItemNum(
 								treesearch_data->itemset_buf_) != 0);
-
 
 		int accum_period_counter_ = 0;
 // reverse order
@@ -392,10 +390,10 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 
 			// todo: if database reduction is implemented,
 			//       do something here for changed lambda_ (skipping new_item value ?)
-			bsh_->Copy(treesearch_data->sup_buf_,
-					treesearch_data->child_sup_buf_);
+			bsh_->Copy(sup_buf_,
+					child_sup_buf_);
 			int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
-					treesearch_data->child_sup_buf_);
+					child_sup_buf_);
 
 			// If the support is smaller than the required minimal support for
 			// significant pattern (=lambda), then prune it.
@@ -407,7 +405,7 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 
 			bool res = g_->PPCExtension(treesearch_data->node_stack_,
 					treesearch_data->itemset_buf_,
-					treesearch_data->child_sup_buf_, core_i, new_item,
+					child_sup_buf_, core_i, new_item,
 					ppc_ext_buf);
 
 			treesearch_data->node_stack_->SetSup(ppc_ext_buf, sup_num);
@@ -431,7 +429,7 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 					closed_set_num_++;
 					if (true) { // XXX: FLAGS_third_phase_
 						int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
-								treesearch_data->child_sup_buf_);
+								child_sup_buf_);
 						double pval = d_->PVal(sup_num, pos_sup_num);
 						assert(pval >= 0.0);
 						if (pval <= gettestable_data->sig_level_) { // permits == case?
@@ -772,13 +770,6 @@ int ParallelPatternMining::NextLambdaThr() const {
 
 /**
  * GETSIGNIFICANT PATTERNS
- *
- *
- *
- *
- *
- *
- *
  *
  */
 

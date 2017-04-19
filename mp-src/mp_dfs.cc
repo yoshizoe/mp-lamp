@@ -95,7 +95,7 @@ MP_LAMP::MP_LAMP(int rank, int nu_proc, int n, bool n_is_ms, int w, int l,
 		int m) :
 		dtd_(k_echo_tree_branch), mpi_data_(FLAGS_bsend_buffer_size, rank,
 				nu_proc, n, n_is_ms, w, l, m, k_echo_tree_branch, &dtd_), d_(
-		NULL),  bsh_(NULL), timer_(Timer::GetInstance()), dtd_accum_array_base_(
+		NULL), bsh_(NULL), timer_(Timer::GetInstance()), dtd_accum_array_base_(
 		NULL), accum_array_(NULL), dtd_accum_recv_base_(NULL), accum_recv_(
 		NULL), give_stack_(NULL), stealer_(mpi_data_.nRandStealTrials_,
 				mpi_data_.hypercubeDimension_), phase_(0), sup_buf_(
@@ -600,8 +600,10 @@ void MP_LAMP::ClearTasks() {
 
 void MP_LAMP::Search() {
 	TreeSearchData* treesearch_data_ = new TreeSearchData(node_stack_,
-			give_stack_, &stealer_, itemset_buf_, sup_buf_, child_sup_buf_, d_, bsh_, &log_, timer_);
-	ParallelPatternMining* psearch = new ParallelPatternMining(d_, bsh_,
+			give_stack_, &stealer_, itemset_buf_, &log_, timer_);
+	BinaryPatternMiningData* bpm_data_ = new BinaryPatternMiningData(d_, bsh_,
+			sup_buf_, child_sup_buf_);
+	ParallelPatternMining* psearch = new ParallelPatternMining(bpm_data_,
 			mpi_data_, treesearch_data_, &log_, timer_);
 	GetMinSupData* getminsup_data_;
 	GetTestableData* gettestable_data_;
@@ -909,6 +911,7 @@ void MP_LAMP::Search() {
 	//ClearTasks();
 	delete psearch;
 	delete treesearch_data_;
+	delete bpm_data_;
 	delete getminsup_data_;
 	delete gettestable_data_;
 	delete getsignificant_data_;
@@ -924,7 +927,6 @@ double MP_LAMP::GetInterimSigLevel(int lambda) const {
 
 	return lv;
 }
-
 
 void MP_LAMP::SortSignificantSets() {
 	int * set = significant_stack_->FirstItemset();
@@ -950,7 +952,6 @@ void MP_LAMP::SortSignificantSets() {
 		set = significant_stack_->NextItemset(set);
 	}
 }
-
 
 // TODO: Ideally, this should also be hidden in other class.
 int MP_LAMP::CallBcast(void * buffer, int data_count, MPI_Datatype type) {
@@ -1557,8 +1558,7 @@ std::ostream& operator<<(std::ostream & out, const FixedSizeStack & st) {
 	return out;
 }
 
-
-}// namespace lamp_search
+}	// namespace lamp_search
 
 /* Local Variables:  */
 /* compile-command: "scons -u" */
