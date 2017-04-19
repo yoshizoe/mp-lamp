@@ -403,7 +403,8 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 		//       Or d_ should provide an interface to list all children at once.
 		//       CoreIndex is what I am not sure about.
 		std::vector<int> children = GetChildren(is_root_node, core_i);
-		for (std::vector<int>::iterator it = children.begin(); it != children.end(); ++it) {
+		for (std::vector<int>::iterator it = children.begin();
+				it != children.end(); ++it) {
 			int new_item = *it;
 			// skip existing item
 			// todo: improve speed here
@@ -411,45 +412,10 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 					treesearch_data->itemset_buf_, new_item))
 				continue;
 
-			// TODO: whatever this is trying to do, it should be factored into a function.
-			//       Why is it Probing while in the expansion loop?
-			{      // Periodic probe. (do in both phases)
-				accum_period_counter_++;
-				if (FLAGS_probe_period_is_ms_) {      // using milli second
-					if (accum_period_counter_ >= 64) { // TODO: what is this magic number?
-						// to avoid calling timer_ frequently, time is checked once in 64 loops
-						// clock_gettime takes 0.3--0.5 micro sec
-						accum_period_counter_ = 0;
-						long long int elt = timer_->Elapsed();
-						if (elt - lap_time >= FLAGS_probe_period_ * 1000000) {
-							log_->d_.process_node_time_ += elt - lap_time;
+			CheckProbe(accum_period_counter_, lap_time);
 
-							Probe(mpi_data, treesearch_data);
-							Distribute(mpi_data, treesearch_data);
-							Reject(mpi_data);
-
-							lap_time = timer_->Elapsed();
-						}
-					}
-				} else {            // not using milli second
-					if (accum_period_counter_ >= FLAGS_probe_period_) {
-						accum_period_counter_ = 0;
-						log_->d_.process_node_time_ += timer_->Elapsed()
-								- lap_time;
-
-						Probe(mpi_data, treesearch_data);
-						Distribute(mpi_data, treesearch_data);
-						Reject(mpi_data);
-
-						lap_time = timer_->Elapsed();
-					}
-				}
-				// note: do this before PushPre is called [2015-10-05 21:56]
-
-				// todo: if database reduction is implemented,
-				//       do something here for changed lambda_ (skipping new_item value ?)
-			}
-
+			// todo: if database reduction is implemented,
+			//       do something here for changed lambda_ (skipping new_item value ?)
 			bsh_->Copy(treesearch_data->sup_buf_,
 					treesearch_data->child_sup_buf_);
 			int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
@@ -535,7 +501,8 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 	return true;
 }
 
-std::vector<int> ParallelPatternMining::GetChildren(bool is_root_node, int coreindex) {
+std::vector<int> ParallelPatternMining::GetChildren(bool is_root_node,
+		int coreindex) {
 	std::vector<int> children;
 	for (int new_item = d_->NextItemInReverseLoop(is_root_node,
 			mpi_data.mpiRank_, mpi_data.nTotalProc_, d_->NuItems());
@@ -546,6 +513,42 @@ std::vector<int> ParallelPatternMining::GetChildren(bool is_root_node, int corei
 	}
 	return children;
 }
+
+void ParallelPatternMining::CheckProbe(int accum_period_counter_, long long int lap_time) {
+	// TODO: whatever this is trying to do, it should be factored into a function.
+	//       Why is it Probing while in the expansion loop?
+	accum_period_counter_++;
+	if (FLAGS_probe_period_is_ms_) {      // using milli second
+		if (accum_period_counter_ >= 64) { // TODO: what is this magic number?
+			// to avoid calling timer_ frequently, time is checked once in 64 loops
+			// clock_gettime takes 0.3--0.5 micro sec
+			accum_period_counter_ = 0;
+			long long int elt = timer_->Elapsed();
+			if (elt - lap_time >= FLAGS_probe_period_ * 1000000) {
+				log_->d_.process_node_time_ += elt - lap_time;
+
+				Probe(mpi_data, treesearch_data);
+				Distribute(mpi_data, treesearch_data);
+				Reject(mpi_data);
+
+				lap_time = timer_->Elapsed();
+			}
+		}
+	} else {            // not using milli second
+		if (accum_period_counter_ >= FLAGS_probe_period_) {
+			accum_period_counter_ = 0;
+			log_->d_.process_node_time_ += timer_->Elapsed() - lap_time;
+
+			Probe(mpi_data, treesearch_data);
+			Distribute(mpi_data, treesearch_data);
+			Reject(mpi_data);
+
+			lap_time = timer_->Elapsed();
+		}
+	}
+	// note: do this before PushPre is called [2015-10-05 21:56]
+}
+
 bool ParallelPatternMining::CheckProcessNodeEnd(int n, bool n_is_ms,
 		int processed, long long int start_time) {
 	long long int elapsed_time;

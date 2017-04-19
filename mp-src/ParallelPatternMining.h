@@ -76,6 +76,7 @@ protected:
 	void Check(MPI_Data& mpi_data);
 	bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data);
 	std::vector<int> GetChildren(bool is_root_node, int coreindex);
+	void CheckProbe(int accum_period_counter_, long long int lap_time);
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 			long long int start_time);
 	/**
