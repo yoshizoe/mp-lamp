@@ -1,6 +1,10 @@
 #!/bin/bash
 
-./make.sh | tee -a made.txt
+if [ -f "made.txt" ]
+then
+    rm made.txt
+fi
+./make.sh 2>&1 | tee -a made.txt
 
 successfullymade=`cat made.txt | grep "error" | wc -l`
 

@@ -62,17 +62,17 @@ protected:
 	 *
 	 */
 	bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	virtual bool ProbeExecute(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+	virtual void ProbeExecute(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 			MPI_Status* probe_status, int probe_src, int probe_tag);
 //	bool ProbeExecuteMINSUP(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 //			MPI_Status& probe_status, int probe_src, int probe_tag);
 
-	void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
-			int steal_num);
-//	void Deal(MPI_Data& mpi_data);
-	void Reject(MPI_Data& mpi_data);
-	void Steal(MPI_Data& mpi_data);
+//	void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
+//	void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
+//			int steal_num);
+////	void Deal(MPI_Data& mpi_data);
+//	void Reject(MPI_Data& mpi_data);
+//	void Steal(MPI_Data& mpi_data);
 	void Check(MPI_Data& mpi_data);
 	bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data);
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
@@ -82,23 +82,23 @@ protected:
 	 *
 	 */
 
-	// 0: count, 1: time warp flag, 2: empty flag
-	void SendDTDRequest(MPI_Data& mpi_data);
-	void RecvDTDRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-			int src);
-
-	bool DTDReplyReady(MPI_Data& mpi_data) const;
-	void DTDCheck(MPI_Data& mpi_data);
-
-	// 0: count, 1: time warp flag, 2: empty flag
-	void SendDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	void RecvDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-			int src);
+//	// 0: count, 1: time warp flag, 2: empty flag
+//	void SendDTDRequest(MPI_Data& mpi_data);
+//	void RecvDTDRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+//			int src);
+//
+//	bool DTDReplyReady(MPI_Data& mpi_data) const;
+//	void DTDCheck(MPI_Data& mpi_data);
+//
+//	// 0: count, 1: time warp flag, 2: empty flag
+//	void SendDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
+//	void RecvDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+//			int src);
 
 //	bool DTDAccumReady(MPI_Data& mpi_data) const;
 
-	void SendBcastFinish(MPI_Data& mpi_data);
-	void RecvBcastFinish(MPI_Data& mpi_data, int src);
+//	void SendBcastFinish(MPI_Data& mpi_data);
+//	void RecvBcastFinish(MPI_Data& mpi_data, int src);
 
 	//--------
 
@@ -108,22 +108,22 @@ protected:
 	// basic
 
 	// send recv functions
-	void SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline); // for random thieves, is_lifeline = -1
-	void RecvRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-			int src);
-
-	// 0: time zone, 1: is_lifeline
-	void SendReject(MPI_Data& mpi_data, int dst);
-	void RecvReject(MPI_Data& mpi_data, int src);
-
-	// 1: time zone
-	void SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int dst,
-			int is_lifeline);
-
-	// sets lifelines_activated_ = false
-	// lifelines_activated_ becomes false only in this case (reject does NOT)
-	void RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data, int src,
-			MPI_Status status);
+//	void SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline); // for random thieves, is_lifeline = -1
+//	void RecvRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+//			int src);
+//
+//	// 0: time zone, 1: is_lifeline
+//	void SendReject(MPI_Data& mpi_data, int dst);
+//	void RecvReject(MPI_Data& mpi_data, int src);
+//
+//	// 1: time zone
+//	void SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int dst,
+//			int is_lifeline);
+//
+//	// sets lifelines_activated_ = false
+//	// lifelines_activated_ becomes false only in this case (reject does NOT)
+//	void RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data, int src,
+//			MPI_Status status);
 
 	bool AccumCountReady(MPI_Data& mpi_data) const;
 
