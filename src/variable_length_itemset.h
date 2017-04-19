@@ -38,143 +38,165 @@
 
 namespace lamp_search {
 
+// TODO: Let's see if it is dependent on binary feature.
+// It hardly makes sense without any comments.
+
 /** variable length itemset data
  *  packed to a continuous memory region */
 class VariableLengthItemsetStack {
- public:
+public:
 
-  static const int TIMESTAMP = 0;
-  static const int FLAG = 1; // used for lifeline flag
-  static const int SENTINEL = 2;
+	static const int TIMESTAMP = 0;
+	static const int FLAG = 1; // used for lifeline flag
+	static const int SENTINEL = 2;
 
-  // data structure for one itemset
-  // 0: [NUM] = (-1) * (number of items + 1)
-  //    negated for indicating start of an itemset. see GetItemNum for details
-  // 1: [SUP] number of support
-  // 2: [ITM] points to the first item in the itemset
-  static const int NUM = 0;
-  static const int SUP = 1;
-  static const int ITM = 2;
+	// data structure for one itemset
+	// 0: [NUM] = (-1) * (number of items + 1)
+	//    negated for indicating start of an itemset. see GetItemNum for details
+	// 1: [SUP] number of support
+	// 2: [ITM] points to the first item in the itemset
+	static const int NUM = 0;
+	static const int SUP = 1;
+	static const int ITM = 2;
 
-  // todo: add check
-  static const int kMaxItemsPerSet = 1024 * 1024 - ITM; // max 4MB
+	// todo: add check
+	static const int kMaxItemsPerSet = 1024 * 1024 - ITM; // max 4MB
 
-  // todo: add check. size must be greater than kMaxItemsPerSet
-  // should be like 256 * kMaxItemsPerSet or something
-  VariableLengthItemsetStack(std::size_t size);
+	// todo: add check. size must be greater than kMaxItemsPerSet
+	// should be like 256 * kMaxItemsPerSet or something
+	VariableLengthItemsetStack(std::size_t size);
 
-  // VariableLengthItemsetStack(std::size_t size, int sup_max);
+	// VariableLengthItemsetStack(std::size_t size, int sup_max);
 
-  ~VariableLengthItemsetStack();
+	~VariableLengthItemsetStack();
 
-  // move top_ and inc nu_itemset_;
-  void PushPre();
-  // update 
-  void PushPost();
-  void PushPostNoSort();
-  void Pop();
+	// move top_ and inc nu_itemset_;
+	void PushPre();
+	// update
+	void PushPost();
+	void PushPostNoSort();
+	void Pop();
 
-  bool SetItemNum(int * index, int num);
-  bool SetSup(int * index, int sup);
-  bool SetOneItem(int * index, int item_num, int item);
+	bool SetItemNum(int * index, int num);
+	bool SetSup(int * index, int sup);
+	bool SetOneItem(int * index, int item_num, int item);
 
-  bool PushOneItem(int item);
-  bool IncItemNum(int * index);
-  bool DecItemNum(int * index);
-  void Clear();
+	bool PushOneItem(int item);
+	bool IncItemNum(int * index);
+	bool DecItemNum(int * index);
+	void Clear();
 
-  static int GetItemNum(const int * index);
-  static int GetSup(const int * index);
-  static int * GetItemArray(int * index);
-  static const int * GetItemArray(const int * index);
+	static int GetItemNum(const int * index);
+	static int GetSup(const int * index);
+	static int * GetItemArray(int * index);
+	static const int * GetItemArray(const int * index);
 
-  int GetNthItem(const int * index, std::size_t n) const;
-  void CopyItem(const int * src, int * dst);
-  // return next item, if not next item, return NULL
-  int * NextItemset(int * index) const;
-  // todo: test
-  bool Exist(const int * index, int item) const;
+	int GetNthItem(const int * index, std::size_t n) const;
+	void CopyItem(const int * src, int * dst);
+	// return next item, if not next item, return NULL
+	int * NextItemset(int * index) const;
+	// todo: test
+	bool Exist(const int * index, int item) const;
 
-  // return ptr to stack_
-  int * Stack() const { return stack_; }
+	// return ptr to stack_
+	int * Stack() const {
+		return stack_;
+	}
 
-  // return ptr to top item
-  int * Top() const;
-  int * FirstItemset() const;
-  
-  void RemoveOneItemset();
+	// return ptr to top item
+	int * Top() const;
+	int * FirstItemset() const;
 
-  void SortOneSet(int * index);
-  void SortTop();
+	void RemoveOneItemset();
 
-  // void IncSupHistogram(int * index);
-  // void DecSupHistogram(int * index);
+	void SortOneSet(int * index);
+	void SortTop();
 
-  // give half of entries to dst (dst should be empty)
-  // return given itemset num
-  int Split(VariableLengthItemsetStack * dst);
-  // merge with entries in another stack
-  bool Merge(VariableLengthItemsetStack * src);
-  // merge with entries in array
-  // stack points to first itemset, size is equal to used capacity - 2
-  bool MergeStack(int * stack, int size);
+	// void IncSupHistogram(int * index);
+	// void DecSupHistogram(int * index);
 
-  // used to discard top itemset
-  // mainly used when removing top after used up detected ???
-  // will be called instead of PushPost
-  void DiscardTop();
+	// give half of entries to dst (dst should be empty)
+	// return given itemset num
+	int Split(VariableLengthItemsetStack * dst);
+	// merge with entries in another stack
+	bool Merge(VariableLengthItemsetStack * src);
+	// merge with entries in array
+	// stack points to first itemset, size is equal to used capacity - 2
+	bool MergeStack(int * stack, int size);
 
-  // discard elements with less than support threshold
-  void GC(int sup_threshold);
+	// used to discard top itemset
+	// mainly used when removing top after used up detected ???
+	// will be called instead of PushPost
+	void DiscardTop();
 
-  bool Empty() const { return nu_itemset_ == 0; }
+	// discard elements with less than support threshold
+	void GC(int sup_threshold);
 
-  // when to call this? every time adding item?
-  bool Full() const;
+	bool Empty() const {
+		return nu_itemset_ == 0;
+	}
 
-  int TotalCapacity() const { return total_capacity_; }
-  int UsedCapacity() const { return used_capacity_; }
+	// when to call this? every time adding item?
+	bool Full() const;
 
-  int NuItemset() const { return nu_itemset_; }
+	int TotalCapacity() const {
+		return total_capacity_;
+	}
+	int UsedCapacity() const {
+		return used_capacity_;
+	}
 
-  // functions for mp-lamp
-  void SetTimestamp(int ts) { stack_[TIMESTAMP] = ts; }
-  int Timestamp() { return stack_[TIMESTAMP]; }
+	int NuItemset() const {
+		return nu_itemset_;
+	}
 
-  void SetFlag(int flg) { stack_[FLAG] = flg; }
-  int Flag() { return stack_[FLAG]; }
+	// functions for mp-lamp
+	void SetTimestamp(int ts) {
+		stack_[TIMESTAMP] = ts;
+	}
+	int Timestamp() {
+		return stack_[TIMESTAMP];
+	}
 
-  // idea
-  // push procedure
-  // PushPre() (just increase nu_itemset and return next pointer)
-  // ptr = top()
-  // set sup, push items, set itemnum, update others
-  // PushPost()
+	void SetFlag(int flg) {
+		stack_[FLAG] = flg;
+	}
+	int Flag() {
+		return stack_[FLAG];
+	}
 
-  // pop procedure
-  // Pop()
+	// idea
+	// push procedure
+	// PushPre() (just increase nu_itemset and return next pointer)
+	// ptr = top()
+	// set sup, push items, set itemnum, update others
+	// PushPost()
 
-  std::ostream& PrintAll(std::ostream & out) const;
+	// pop procedure
+	// Pop()
 
-  std::ostream& Print(std::ostream & out, const int * index) const;
+	std::ostream& PrintAll(std::ostream & out) const;
 
-  std::ostream& Print(std::ostream & out, const std::vector< std::string > * item_names,
-                      const int * index) const;
+	std::ostream& Print(std::ostream & out, const int * index) const;
 
- private:
-  int * stack_;
-  // note: top_ points to the head of the last item
-  //       stack_[used_capacity_] points to the head of the next item
-  int * top_;
+	std::ostream& Print(std::ostream & out,
+			const std::vector<std::string> * item_names,
+			const int * index) const;
 
-  // note: is this enough?
-  int total_capacity_;
-  int used_capacity_;
+private:
+	int * stack_;
+	// note: top_ points to the head of the last item
+	//       stack_[used_capacity_] points to the head of the next item
+	int * top_;
 
-  std::size_t nu_itemset_;
+	// note: is this enough?
+	int total_capacity_;
+	int used_capacity_;
 
-  // int sup_max_;
-  // int * sup_hist_; // sup histogram
+	std::size_t nu_itemset_;
+
+	// int sup_max_;
+	// int * sup_hist_; // sup histogram
 };
 
 } // namespace lamp_search

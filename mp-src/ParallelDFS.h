@@ -28,7 +28,7 @@ protected:
 	/**
 	 * Parallel Search Basic Methods.
 	 */
-	virtual bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data) = 0;
+	virtual bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
 	virtual void ProbeExecute(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 			MPI_Status* probe_status, int probe_src, int probe_tag);
 	virtual void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
@@ -36,6 +36,8 @@ protected:
 			int steal_num) ;
 	virtual void Reject(MPI_Data& mpi_data);
 	virtual void Steal(MPI_Data& mpi_data);
+
+	virtual void ProcAfterProbe() = 0;
 	virtual void Check(MPI_Data& mpi_data) = 0;
 	virtual bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data) = 0;
 

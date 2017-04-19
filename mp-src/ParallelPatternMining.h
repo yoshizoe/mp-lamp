@@ -61,7 +61,7 @@ protected:
 	 * Methods used for ALL searches: Maybe they should be overrided by other methods.
 	 *
 	 */
-	bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
+//	bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
 	virtual void ProbeExecute(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 			MPI_Status* probe_status, int probe_src, int probe_tag);
 //	bool ProbeExecuteMINSUP(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
@@ -73,6 +73,7 @@ protected:
 ////	void Deal(MPI_Data& mpi_data);
 //	void Reject(MPI_Data& mpi_data);
 //	void Steal(MPI_Data& mpi_data);
+	void ProcAfterProbe();
 	void Check(MPI_Data& mpi_data);
 	bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data);
 	std::vector<int> GetChildren(bool is_root_node, int coreindex);

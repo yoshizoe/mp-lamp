@@ -49,6 +49,7 @@ ParallelPatternMining::~ParallelPatternMining() {
 	// TODO: lots of things to delete
 }
 
+// TODO: This should be under GetMinimumSupport
 void ParallelPatternMining::PreProcessRootNode(GetMinSupData* getminsup_data) {
 	this->getminsup_data = getminsup_data;
 	phase_ = 1;
@@ -225,34 +226,10 @@ void ParallelPatternMining::GetSignificantPatterns(MPI_Data& mpi_data,
 }
 
 //==============================================================================
-
-bool ParallelPatternMining::Probe(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data) {
-	DBG(D(3) << "Probe" << std::endl
-	;);
-	MPI_Status probe_status;
-	int probe_src, probe_tag;
-
-	long long int start_time;
-	start_time = timer_->Elapsed();
-
-	log_->d_.probe_num_++;
-
-	while (CallIprobe(&probe_status, &probe_src, &probe_tag)) {
-		DBG(
-				D(4) << "CallIprobe returned src=" << probe_src << "\ttag="
-						<< probe_tag << std::endl
-				;);
-		ProbeExecute(mpi_data, treesearch_data, &probe_status, probe_src,
-				probe_tag);
-	}
-
-	// capacity, lambda, phase
-	assert(treesearch_data->node_stack_);
-
-	/**
-	 * Domain Specifics
-	 */
+/**
+ * Procedure to run after Probe().
+ */
+void ParallelPatternMining::ProcAfterProbe() {
 	if (phase_ == 1) {
 		log_->TakePeriodicLog(treesearch_data->node_stack_->NuItemset(),
 				getminsup_data->lambda_, phase_);
@@ -267,11 +244,11 @@ bool ParallelPatternMining::Probe(MPI_Data& mpi_data,
 		// note: for phase_ 1, accum request and dtd request are unified
 		if (!mpi_data.echo_waiting_ && !mpi_data.dtd_->terminated_) {
 			if (phase_ == 1) {
-				SendDTDAccumRequest(mpi_data);
+				SendDTDAccumRequest (mpi_data);
 				// log_->d_.dtd_accum_request_num_++;
 			} else if (phase_ == 2) {
 				if (treesearch_data->node_stack_->Empty()) {
-					SendDTDRequest(mpi_data);
+					SendDTDRequest (mpi_data);
 					// log_->d_.dtd_request_num_++;
 				}
 			} else {
@@ -280,10 +257,6 @@ bool ParallelPatternMining::Probe(MPI_Data& mpi_data,
 			}
 		}
 	}
-
-	long long int elapsed_time = timer_->Elapsed() - start_time;
-	log_->d_.probe_time_ += elapsed_time;
-	log_->d_.probe_time_max_ = std::max(elapsed_time, log_->d_.probe_time_max_);
 }
 
 void ParallelPatternMining::ProbeExecute(MPI_Data& mpi_data,
@@ -328,6 +301,10 @@ void ParallelPatternMining::ProbeExecute(MPI_Data& mpi_data,
 	}
 	return;
 }
+
+/**
+ * Domain specifics
+ */
 
 /**
  * GetMinSup specific
@@ -514,7 +491,8 @@ std::vector<int> ParallelPatternMining::GetChildren(bool is_root_node,
 	return children;
 }
 
-void ParallelPatternMining::CheckProbe(int accum_period_counter_, long long int lap_time) {
+void ParallelPatternMining::CheckProbe(int accum_period_counter_,
+		long long int lap_time) {
 	// TODO: whatever this is trying to do, it should be factored into a function.
 	//       Why is it Probing while in the expansion loop?
 	accum_period_counter_++;
