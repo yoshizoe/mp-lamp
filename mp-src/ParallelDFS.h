@@ -39,7 +39,7 @@ protected:
 
 	virtual void ProcAfterProbe() = 0;
 	virtual void Check(MPI_Data& mpi_data) = 0;
-	virtual bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data) = 0;
+	virtual bool ExpandNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data) = 0;
 
 	/**
 	 * ProbeExecute implementation

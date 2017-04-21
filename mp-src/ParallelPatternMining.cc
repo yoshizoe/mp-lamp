@@ -324,7 +324,7 @@ void ParallelPatternMining::Check(MPI_Data& mpi_data) {
 }
 
 // TODO: What does it do after all?
-bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
+bool ParallelPatternMining::ExpandNode(MPI_Data& mpi_data,
 		TreeSearchData* treesearch_data) {
 	if (treesearch_data->node_stack_->Empty())
 		return false;
@@ -373,7 +373,6 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 //			if (!res) {        // todo: remove this redundancy
 //				treesearch_data->node_stack_->Pop();
 //			} else {
-			treesearch_data->node_stack_->SortTop();
 
 			DBG(if (phase_ == 2) {
 				D(3) << "found cs "
@@ -382,27 +381,29 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 				;
 			});
 
-			if (phase_ == 1)
-				IncCsAccum(sup_num); // increment closed_set_num_array
-			if (phase_ == 2) {
-				closed_set_num_++;
-				if (true) { // XXX: FLAGS_third_phase_
-					int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
-							child_sup_buf_);
-					double pval = d_->PVal(sup_num, pos_sup_num);
-					assert(pval >= 0.0);
-					if (pval <= gettestable_data->sig_level_) { // permits == case?
-						gettestable_data->freq_stack_->PushPre();
-						int * item = gettestable_data->freq_stack_->Top();
-						gettestable_data->freq_stack_->CopyItem(ppc_ext_buf,
-								item);
-						gettestable_data->freq_stack_->PushPostNoSort();
-
-						gettestable_data->freq_map_->insert(
-								std::pair<double, int*>(pval, item));
-					}
-				}
-			}
+			ProcessNode(sup_num, ppc_ext_buf);
+//			// TODO: This procedure should be named ProcessNode instead.
+//			if (phase_ == 1)
+//				IncCsAccum(sup_num); // increment closed_set_num_array
+//			if (phase_ == 2) {
+//				closed_set_num_++;
+//				if (true) { // XXX: FLAGS_third_phase_
+//					int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
+//							child_sup_buf_);
+//					double pval = d_->PVal(sup_num, pos_sup_num);
+//					assert(pval >= 0.0);
+//					if (pval <= gettestable_data->sig_level_) { // permits == case?
+//						gettestable_data->freq_stack_->PushPre();
+//						int * item = gettestable_data->freq_stack_->Top();
+//						gettestable_data->freq_stack_->CopyItem(ppc_ext_buf,
+//								item);
+//						gettestable_data->freq_stack_->PushPostNoSort();
+//
+//						gettestable_data->freq_map_->insert(
+//								std::pair<double, int*>(pval, item));
+//					}
+//				}
+//			}
 
 			assert(sup_num >= getminsup_data->lambda_);
 
@@ -410,9 +411,9 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 			// because if sup_num of a node equals to sup_threshold, children will have smaller sup_num
 			// therefore no need to check it's children
 			// note: skipping node_stack_ full check. allocate enough memory!
-			// TODO: ???
-			if (sup_num <= getminsup_data->lambda_)
+			if (sup_num == getminsup_data->lambda_) {
 				treesearch_data->node_stack_->Pop();
+			}
 //			}
 		}
 
@@ -497,8 +498,7 @@ void ParallelPatternMining::PopNodeFromStack() {
  * 1. The support of the itemset should be larger or equal to lambda (minimal support).
  * 2. New node should be a PPC extension of the parent itemset.
  */
-bool ParallelPatternMining::TestAndPushNode(int new_item,
-		int core_i) {
+bool ParallelPatternMining::TestAndPushNode(int new_item, int core_i) {
 //	// todo: if database reduction is implemented,
 //	//       do something here for changed lambda_ (skipping new_item value ?)
 
@@ -527,7 +527,31 @@ bool ParallelPatternMining::TestAndPushNode(int new_item,
 		return false;
 	}
 
+	treesearch_data->node_stack_->SortTop();
+
 	return true;
+}
+
+void ParallelPatternMining::ProcessNode(int sup_num, int* ppc_ext_buf) {
+	if (phase_ == 1)
+		IncCsAccum(sup_num); // increment closed_set_num_array
+	if (phase_ == 2) {
+		closed_set_num_++;
+		if (true) { // XXX: FLAGS_third_phase_
+			int pos_sup_num = bsh_->AndCount(d_->PosNeg(), child_sup_buf_);
+			double pval = d_->PVal(sup_num, pos_sup_num);
+			assert(pval >= 0.0);
+			if (pval <= gettestable_data->sig_level_) { // permits == case?
+				gettestable_data->freq_stack_->PushPre();
+				int * item = gettestable_data->freq_stack_->Top();
+				gettestable_data->freq_stack_->CopyItem(ppc_ext_buf, item);
+				gettestable_data->freq_stack_->PushPostNoSort();
+
+				gettestable_data->freq_map_->insert(
+						std::pair<double, int*>(pval, item));
+			}
+		}
+	}
 }
 
 void ParallelPatternMining::CheckProbe(int accum_period_counter_,

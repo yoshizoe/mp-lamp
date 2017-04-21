@@ -28,7 +28,7 @@ void ParallelDFS::Search() {
 	);
 	while (!mpi_data.dtd_->terminated_) {
 		while (!mpi_data.dtd_->terminated_) {
-			if (ProcessNode(mpi_data, treesearch_data)) {
+			if (ExpandNode(mpi_data, treesearch_data)) {
 				log_->d_.node_stack_max_itm_ =
 						std::max(log_->d_.node_stack_max_itm_,
 								(long long int) (treesearch_data->node_stack_->NuItemset()));
