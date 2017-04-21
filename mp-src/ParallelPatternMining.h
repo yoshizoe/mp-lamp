@@ -73,14 +73,14 @@ protected:
 ////	void Deal(MPI_Data& mpi_data);
 //	void Reject(MPI_Data& mpi_data);
 //	void Steal(MPI_Data& mpi_data);
-	void ProcAfterProbe();
-	void Check(MPI_Data& mpi_data);
+	void ProcAfterProbe(); // DOMAINDEPENDENT
+	void Check(MPI_Data& mpi_data); // DOMAINDEPENDENT
 	bool ExpandNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data);
-	std::vector<int> GetChildren(int core_i);
+	std::vector<int> GetChildren(int core_i); // DOMAINDEPENDENT
 	void PopNodeFromStack();
 	bool TestAndPushNode(int new_item, int core_i);
 	void ProcessNode(int sup_num, int* ppc_ext_buf);
-	void CheckProbe(int accum_period_counter_, long long int lap_time);
+	void CheckProbe(int& accum_period_counter_, long long int lap_time);
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 			long long int start_time);
 	/**

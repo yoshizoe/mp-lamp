@@ -370,10 +370,6 @@ bool ParallelPatternMining::ExpandNode(MPI_Data& mpi_data,
 			int* ppc_ext_buf = treesearch_data->node_stack_->Top();
 			int sup_num = treesearch_data->node_stack_->GetSup(ppc_ext_buf);
 
-//			if (!res) {        // todo: remove this redundancy
-//				treesearch_data->node_stack_->Pop();
-//			} else {
-
 			DBG(if (phase_ == 2) {
 				D(3) << "found cs "
 				;
@@ -382,28 +378,6 @@ bool ParallelPatternMining::ExpandNode(MPI_Data& mpi_data,
 			});
 
 			ProcessNode(sup_num, ppc_ext_buf);
-//			// TODO: This procedure should be named ProcessNode instead.
-//			if (phase_ == 1)
-//				IncCsAccum(sup_num); // increment closed_set_num_array
-//			if (phase_ == 2) {
-//				closed_set_num_++;
-//				if (true) { // XXX: FLAGS_third_phase_
-//					int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
-//							child_sup_buf_);
-//					double pval = d_->PVal(sup_num, pos_sup_num);
-//					assert(pval >= 0.0);
-//					if (pval <= gettestable_data->sig_level_) { // permits == case?
-//						gettestable_data->freq_stack_->PushPre();
-//						int * item = gettestable_data->freq_stack_->Top();
-//						gettestable_data->freq_stack_->CopyItem(ppc_ext_buf,
-//								item);
-//						gettestable_data->freq_stack_->PushPostNoSort();
-//
-//						gettestable_data->freq_map_->insert(
-//								std::pair<double, int*>(pval, item));
-//					}
-//				}
-//			}
 
 			assert(sup_num >= getminsup_data->lambda_);
 
@@ -414,7 +388,6 @@ bool ParallelPatternMining::ExpandNode(MPI_Data& mpi_data,
 			if (sup_num == getminsup_data->lambda_) {
 				treesearch_data->node_stack_->Pop();
 			}
-//			}
 		}
 
 		if (CheckProcessNodeEnd(mpi_data.granularity_,
@@ -554,7 +527,7 @@ void ParallelPatternMining::ProcessNode(int sup_num, int* ppc_ext_buf) {
 	}
 }
 
-void ParallelPatternMining::CheckProbe(int accum_period_counter_,
+void ParallelPatternMining::CheckProbe(int& accum_period_counter_,
 		long long int lap_time) {
 // TODO: whatever this is trying to do, it should be factored into a function.
 //       Why is it Probing while in the expansion loop?

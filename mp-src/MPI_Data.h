@@ -38,7 +38,7 @@ struct TreeSearchData {
 	VariableLengthItemsetStack * node_stack_;
 	VariableLengthItemsetStack * give_stack_;
 	StealState* stealer_;
-	int* itemset_buf_;
+	int* itemset_buf_; // Itemset = state.
 
 	// Utils // TODO: put in mpi_data
 	Log *log_;
