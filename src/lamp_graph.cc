@@ -100,14 +100,17 @@ int LampGraph<Block>::CoreIndex(const VariableLengthItemsetStack & st,
 	return core_i;
 }
 
-/** return if not ppc extention
+/**
+ * SIDE EFFECT: ext_buf: items in *items are copied to ext_buf
+ *  return if not ppc extention
  *  asserts new_item > core_i(items) and new_item not in items
- *  and sup already &= ed with support of new_item */
+ *  and sup already &= ed with support of new_item
+ */
 template<typename Block>
 bool LampGraph<Block>::PPCExtension(VariableLengthItemsetStack * st,
 		const int * items, Block * sup, int core_i, // not needed?
 		int new_item, int * ext_buf) const {
-	st->CopyItem(items, ext_buf);
+	st->CopyItem(items, ext_buf); // This kind of side effect is not maintainable.
 	// ext_buf should have VariableLengthItemsetStack::kMaxItemSet + 1 size
 
 	// note: do following before call

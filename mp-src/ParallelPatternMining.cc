@@ -103,10 +103,11 @@ void ParallelPatternMining::PreProcessRootNode(GetMinSupData* getminsup_data) {
 
 		treesearch_data->node_stack_->PushPre();
 		ppc_ext_buf = treesearch_data->node_stack_->Top();
-
+//		treesearch_data->node_stack_->CopyItem(treesearch_data->itemset_buf_,
+//				ppc_ext_buf);
 		bool res = g_->PPCExtension(treesearch_data->node_stack_,
-				treesearch_data->itemset_buf_, child_sup_buf_,
-				core_i, new_item, ppc_ext_buf);
+				treesearch_data->itemset_buf_, child_sup_buf_, core_i, new_item,
+				ppc_ext_buf);
 
 		treesearch_data->node_stack_->SetSup(ppc_ext_buf, sup_num);
 		treesearch_data->node_stack_->PushPostNoSort();
@@ -160,10 +161,12 @@ void ParallelPatternMining::PreProcessRootNode(GetMinSupData* getminsup_data) {
 
 		treesearch_data->node_stack_->PushPre();
 		ppc_ext_buf = treesearch_data->node_stack_->Top();
+//		treesearch_data->node_stack_->CopyItem(treesearch_data->itemset_buf_,
+//				ppc_ext_buf);
 
 		bool res = g_->PPCExtension(treesearch_data->node_stack_,
-				treesearch_data->itemset_buf_, child_sup_buf_,
-				core_i, new_item, ppc_ext_buf);
+				treesearch_data->itemset_buf_, child_sup_buf_, core_i, new_item,
+				ppc_ext_buf);
 
 		treesearch_data->node_stack_->SetSup(ppc_ext_buf, sup_num);
 		treesearch_data->node_stack_->PushPostNoSort();
@@ -196,6 +199,7 @@ void ParallelPatternMining::GetMinimalSupport(GetMinSupData* getminsup_data) {
 	phase_ = 1; // TODO: remove dependency on this
 	Search();
 
+	// return lambda?
 }
 
 void ParallelPatternMining::GetTestablePatterns(
@@ -334,35 +338,7 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 		processed++;
 		expand_num_++;
 
-		treesearch_data->node_stack_->CopyItem(
-				treesearch_data->node_stack_->Top(),
-				treesearch_data->itemset_buf_);
-		treesearch_data->node_stack_->Pop();
-
-// dbg
-		DBG(D(3) << "expanded "
-		;);
-		DBG(
-				treesearch_data->node_stack_->Print(D(3),
-						treesearch_data->itemset_buf_)
-				;);
-
-// TODO: THIS SHIT IS DEPENDENT ON bsh_
-// calculate support from itemset_buf_
-		bsh_->Set(sup_buf_);
-		{
-			int n = treesearch_data->node_stack_->GetItemNum(
-					treesearch_data->itemset_buf_);
-			for (int i = 0; i < n; i++) {
-				int item = treesearch_data->node_stack_->GetNthItem(
-						treesearch_data->itemset_buf_, i);
-				bsh_->And(d_->NthData(item), sup_buf_);
-			}
-		}
-
-		// TODO: not sure what it is
-		int * ppc_ext_buf;
-// todo: use database reduction
+		PopNodeFromStack();
 
 		assert(
 				phase_ != 1
@@ -370,91 +346,74 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 								treesearch_data->itemset_buf_) != 0);
 
 		int accum_period_counter_ = 0;
-// reverse order
-// for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
-		// TODO: d_ should provide an interface to list all children at once.
-		//       CoreIndex is what I am not sure about.
+
+		// TODO: core_i should be hidden
 		int core_i = g_->CoreIndex(*treesearch_data->node_stack_,
 				treesearch_data->itemset_buf_);
 		std::vector<int> children = GetChildren(core_i);
 		for (std::vector<int>::iterator it = children.begin();
 				it != children.end(); ++it) {
 			int new_item = *it;
+
+			if (treesearch_data->node_stack_->Exist(
+					treesearch_data->itemset_buf_, new_item)) {
+				return false;
+			}
 			// skip existing item
 			// todo: improve speed here
-			if (treesearch_data->node_stack_->Exist(
-					treesearch_data->itemset_buf_, new_item))
-				continue;
-
 			CheckProbe(accum_period_counter_, lap_time);
 
-			// todo: if database reduction is implemented,
-			//       do something here for changed lambda_ (skipping new_item value ?)
-			bsh_->Copy(sup_buf_,
-					child_sup_buf_);
-			int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item),
-					child_sup_buf_);
-
-			// If the support is smaller than the required minimal support for
-			// significant pattern (=lambda), then prune it.
-			if (sup_num < getminsup_data->lambda_)
+			if (!TestAndPushNode(new_item, core_i)) {
 				continue;
+			}
 
-			treesearch_data->node_stack_->PushPre();
-			ppc_ext_buf = treesearch_data->node_stack_->Top();
+			int* ppc_ext_buf = treesearch_data->node_stack_->Top();
+			int sup_num = treesearch_data->node_stack_->GetSup(ppc_ext_buf);
 
-			bool res = g_->PPCExtension(treesearch_data->node_stack_,
-					treesearch_data->itemset_buf_,
-					child_sup_buf_, core_i, new_item,
-					ppc_ext_buf);
+//			if (!res) {        // todo: remove this redundancy
+//				treesearch_data->node_stack_->Pop();
+//			} else {
+			treesearch_data->node_stack_->SortTop();
 
-			treesearch_data->node_stack_->SetSup(ppc_ext_buf, sup_num);
-			treesearch_data->node_stack_->PushPostNoSort();
+			DBG(if (phase_ == 2) {
+				D(3) << "found cs "
+				;
+				treesearch_data->node_stack_->Print(D(3), ppc_ext_buf)
+				;
+			});
 
-			if (!res) {        // todo: remove this redundancy
-				treesearch_data->node_stack_->Pop();
-			} else {
-				treesearch_data->node_stack_->SortTop();
+			if (phase_ == 1)
+				IncCsAccum(sup_num); // increment closed_set_num_array
+			if (phase_ == 2) {
+				closed_set_num_++;
+				if (true) { // XXX: FLAGS_third_phase_
+					int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
+							child_sup_buf_);
+					double pval = d_->PVal(sup_num, pos_sup_num);
+					assert(pval >= 0.0);
+					if (pval <= gettestable_data->sig_level_) { // permits == case?
+						gettestable_data->freq_stack_->PushPre();
+						int * item = gettestable_data->freq_stack_->Top();
+						gettestable_data->freq_stack_->CopyItem(ppc_ext_buf,
+								item);
+						gettestable_data->freq_stack_->PushPostNoSort();
 
-				DBG(if (phase_ == 2) {
-					D(3) << "found cs "
-					;
-					treesearch_data->node_stack_->Print(D(3), ppc_ext_buf)
-					;
-				});
-
-				if (phase_ == 1)
-					IncCsAccum(sup_num); // increment closed_set_num_array
-				if (phase_ == 2) {
-					closed_set_num_++;
-					if (true) { // XXX: FLAGS_third_phase_
-						int pos_sup_num = bsh_->AndCount(d_->PosNeg(),
-								child_sup_buf_);
-						double pval = d_->PVal(sup_num, pos_sup_num);
-						assert(pval >= 0.0);
-						if (pval <= gettestable_data->sig_level_) { // permits == case?
-							gettestable_data->freq_stack_->PushPre();
-							int * item = gettestable_data->freq_stack_->Top();
-							gettestable_data->freq_stack_->CopyItem(ppc_ext_buf,
-									item);
-							gettestable_data->freq_stack_->PushPostNoSort();
-
-							gettestable_data->freq_map_->insert(
-									std::pair<double, int*>(pval, item));
-						}
+						gettestable_data->freq_map_->insert(
+								std::pair<double, int*>(pval, item));
 					}
 				}
-
-				assert(sup_num >= getminsup_data->lambda_);
-
-				// try skipping if supnum_ == sup_threshold,
-				// because if sup_num of a node equals to sup_threshold, children will have smaller sup_num
-				// therefore no need to check it's children
-				// note: skipping node_stack_ full check. allocate enough memory!
-				// TODO: ???
-				if (sup_num <= getminsup_data->lambda_)
-					treesearch_data->node_stack_->Pop();
 			}
+
+			assert(sup_num >= getminsup_data->lambda_);
+
+			// try skipping if supnum_ == sup_threshold,
+			// because if sup_num of a node equals to sup_threshold, children will have smaller sup_num
+			// therefore no need to check it's children
+			// note: skipping node_stack_ full check. allocate enough memory!
+			// TODO: ???
+			if (sup_num <= getminsup_data->lambda_)
+				treesearch_data->node_stack_->Pop();
+//			}
 		}
 
 		if (CheckProcessNodeEnd(mpi_data.granularity_,
@@ -475,10 +434,14 @@ bool ParallelPatternMining::ProcessNode(MPI_Data& mpi_data,
 	return true;
 }
 
+// TODO: Dependent on d_. This function should be responsible of Domain class.
+// TODO: Should make clear distinction of LAMP children and immediate children?
 std::vector<int> ParallelPatternMining::GetChildren(int core_i) {
 	bool is_root_node = (treesearch_data->node_stack_->GetItemNum(
 			treesearch_data->itemset_buf_) == 0);
 
+	// reverse order
+	// for ( int new_item = d_->NuItems()-1 ; new_item >= core_i+1 ; new_item-- )
 	std::vector<int> children;
 	for (int new_item = d_->NextItemInReverseLoop(is_root_node,
 			mpi_data.mpiRank_, mpi_data.nTotalProc_, d_->NuItems());
@@ -490,10 +453,87 @@ std::vector<int> ParallelPatternMining::GetChildren(int core_i) {
 	return children;
 }
 
+/**
+ * itemset_buf_ := pointer to the index of itemset
+ * sup_buf_     := support* of the itemset (takes AND for each item)
+ * support*     := transactions which include all items in the itemset
+ */
+void ParallelPatternMining::PopNodeFromStack() {
+	/**
+	 * Pop item index and put into itemset_buf.
+	 * This part is not dependent on the feature.
+	 */
+	treesearch_data->node_stack_->CopyItem(treesearch_data->node_stack_->Top(),
+			treesearch_data->itemset_buf_);
+	treesearch_data->node_stack_->Pop();
+
+// dbg
+	DBG(D(3) << "expanded "
+	;);
+	DBG(treesearch_data->node_stack_->Print(D(3), treesearch_data->itemset_buf_)
+	;);
+
+	/**
+	 * Get the support (frequency) of the item into sup_buf_
+	 */
+// TODO: This part is dependent on feature.
+	// Why is it uint64???
+	bsh_->Set(sup_buf_);
+	{
+		// This should definitely be inside the Domain class.
+		// n := number of items in the itemset.
+		int n = treesearch_data->node_stack_->GetItemNum(
+				treesearch_data->itemset_buf_);
+		for (int i = 0; i < n; i++) {
+			int item = treesearch_data->node_stack_->GetNthItem(
+					treesearch_data->itemset_buf_, i);
+			bsh_->And(d_->NthData(item), sup_buf_);
+		}
+	}
+}
+
+/**
+ * Test two pruning criteria before pushing
+ * 1. The support of the itemset should be larger or equal to lambda (minimal support).
+ * 2. New node should be a PPC extension of the parent itemset.
+ */
+bool ParallelPatternMining::TestAndPushNode(int new_item,
+		int core_i) {
+//	// todo: if database reduction is implemented,
+//	//       do something here for changed lambda_ (skipping new_item value ?)
+
+	bsh_->Copy(sup_buf_, child_sup_buf_);
+	int sup_num = bsh_->AndCountUpdate(d_->NthData(new_item), child_sup_buf_);
+	// If the support is smaller than the required minimal support for
+	// significant pattern (=lambda), then prune it.
+	if (sup_num < getminsup_data->lambda_) {
+		return false;
+	}
+	// TODO: Here it is inserting a new item into the node_stack_.
+	treesearch_data->node_stack_->PushPre();
+	int* ppc_ext_buf = treesearch_data->node_stack_->Top();
+
+	// TODO: return true if child_sup_buf_ is PPC extension???
+	bool res = g_->PPCExtension(treesearch_data->node_stack_,
+			treesearch_data->itemset_buf_, child_sup_buf_, core_i, new_item,
+			ppc_ext_buf);
+
+	// TODO: Those things should be done in other class.
+	treesearch_data->node_stack_->SetSup(ppc_ext_buf, sup_num);
+	treesearch_data->node_stack_->PushPostNoSort();
+
+	if (!res) {        // todo: remove this redundancy
+		treesearch_data->node_stack_->Pop();
+		return false;
+	}
+
+	return true;
+}
+
 void ParallelPatternMining::CheckProbe(int accum_period_counter_,
 		long long int lap_time) {
-	// TODO: whatever this is trying to do, it should be factored into a function.
-	//       Why is it Probing while in the expansion loop?
+// TODO: whatever this is trying to do, it should be factored into a function.
+//       Why is it Probing while in the expansion loop?
 	accum_period_counter_++;
 	if (FLAGS_probe_period_is_ms_) {      // using milli second
 		if (accum_period_counter_ >= 64) { // TODO: what is this magic number?
@@ -523,7 +563,7 @@ void ParallelPatternMining::CheckProbe(int accum_period_counter_,
 			lap_time = timer_->Elapsed();
 		}
 	}
-	// note: do this before PushPre is called [2015-10-05 21:56]
+// note: do this before PushPre is called [2015-10-05 21:56]
 }
 
 bool ParallelPatternMining::CheckProcessNodeEnd(int n, bool n_is_ms,
@@ -587,15 +627,15 @@ void ParallelPatternMining::SendDTDAccumReply(MPI_Data& mpi_data) {
 	bool tw_flag = mpi_data.dtd_->time_warp_
 			|| mpi_data.dtd_->reduce_time_warp_;
 	getminsup_data->dtd_accum_array_base_[1] = (tw_flag ? 1 : 0);
-	// for Steal
+// for Steal
 	mpi_data.dtd_->not_empty_ = !(treesearch_data->node_stack_->Empty())
 			|| (mpi_data.thieves_->Size() > 0)
 			|| treesearch_data->stealer_->StealStarted()
 			|| mpi_data.processing_node_; // thieves_ and stealer state check
-	// for Steal2
-	// mpi_data.dtd_->not_empty_ =
-	//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
-	//     waiting_ || mpi_data.processing_node_;
+// for Steal2
+// mpi_data.dtd_->not_empty_ =
+//     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
+//     waiting_ || mpi_data.processing_node_;
 	bool em_flag = mpi_data.dtd_->not_empty_
 			|| mpi_data.dtd_->reduce_not_empty_;
 	getminsup_data->dtd_accum_array_base_[2] = (em_flag ? 1 : 0);
@@ -686,7 +726,7 @@ void ParallelPatternMining::RecvDTDAccumReply(MPI_Data& mpi_data, int src) {
  *
  */
 void ParallelPatternMining::SendLambda(MPI_Data& mpi_data, int lambda) {
-	// send lambda to bcast_targets_
+// send lambda to bcast_targets_
 	int message[2];
 	message[0] = mpi_data.dtd_->time_zone_;
 	message[1] = lambda;
@@ -735,8 +775,8 @@ bool ParallelPatternMining::AccumCountReady(MPI_Data& mpi_data) const {
 		if (mpi_data.bcast_targets_[i] >= 0 && !(mpi_data.accum_flag_[i]))
 			return false;
 	return true;
-	// check only valid bcast_targets_
-	// always true if leaf
+// check only valid bcast_targets_
+// always true if leaf
 }
 
 void ParallelPatternMining::CheckCSThreshold(MPI_Data& mpi_data) {
@@ -754,7 +794,7 @@ void ParallelPatternMining::IncCsAccum(int sup_num) {
 }
 
 bool ParallelPatternMining::ExceedCsThr() const {
-	// note: > is correct. permit ==
+// note: > is correct. permit ==
 	return (getminsup_data->accum_array_[getminsup_data->lambda_]
 			> getminsup_data->cs_thr_[getminsup_data->lambda_]);
 }
@@ -855,7 +895,7 @@ void ParallelPatternMining::RecvResultReply(MPI_Data& mpi_data, int src,
 	DBG(getsignificant_data->significant_stack_->PrintAll(D(3, false))
 	;);
 
-	// using the same flags as accum count, should be fixed
+// using the same flags as accum count, should be fixed
 	bool flag = false;
 	for (int i = 0; i < k_echo_tree_branch; i++) {
 		if (mpi_data.bcast_targets_[i] == src) {

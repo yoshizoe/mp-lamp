@@ -70,6 +70,8 @@ public:
 
 	~VariableLengthItemsetStack();
 
+	int* Push(int * item, int support_num);
+
 	// move top_ and inc nu_itemset_;
 	void PushPre();
 	// update

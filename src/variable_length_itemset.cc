@@ -61,6 +61,16 @@ VariableLengthItemsetStack::~VariableLengthItemsetStack() {
 	// if (sup_hist_) delete [] sup_hist_;
 }
 
+// NoSort?
+int* VariableLengthItemsetStack::Push(int * item, int support_num) {
+	PushPre();
+	int* ret = Top();
+//	CopyItem(item, ret);
+//	SetSup(ret, support_num);
+//	PushPostNoSort();
+	return ret;
+}
+
 void VariableLengthItemsetStack::PushPre() {
 	top_ = &(stack_[used_capacity_]);
 	SetItemNum(top_, 0); // clear item num

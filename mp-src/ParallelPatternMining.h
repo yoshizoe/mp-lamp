@@ -43,7 +43,8 @@ protected:
 	Database<uint64> * d_;
 	LampGraph<uint64> * g_;
 	VariableBitsetHelper<uint64> * bsh_;
-	uint64 * sup_buf_, *child_sup_buf_;
+	uint64 * sup_buf_, *child_sup_buf_; // TODO: sup_buf_ is only used in ProcessNode and PreProcessRootNode!
+
 	/*
 	 * Data structure
 	 */
@@ -76,6 +77,8 @@ protected:
 	void Check(MPI_Data& mpi_data);
 	bool ProcessNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data);
 	std::vector<int> GetChildren(int core_i);
+	void PopNodeFromStack();
+	bool TestAndPushNode(int new_item, int core_i);
 	void CheckProbe(int accum_period_counter_, long long int lap_time);
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 			long long int start_time);
