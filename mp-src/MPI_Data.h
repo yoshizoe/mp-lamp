@@ -21,6 +21,7 @@
 #include "../src/database.h"
 #include "../src/variable_bitset_array.h"
 #include "../src/timer.h"
+#include "../src/contdatabase.h"
 
 // GLB variables
 namespace lamp_search {
@@ -28,10 +29,9 @@ namespace lamp_search {
 struct TreeSearchData {
 	TreeSearchData(VariableLengthItemsetStack * nstack,
 			VariableLengthItemsetStack * gstack, StealState* stealer_,
-			int* itemset_buf_,
-			Log *log_, Timer * timer_) :
-			node_stack_(nstack), give_stack_(gstack), stealer_(stealer_), itemset_buf_(
-					itemset_buf_), log_(log_), timer_(
+			int* itemset_buf_, Log *log_, Timer * timer_) :
+			node_stack_(nstack), give_stack_(gstack), stealer_(
+					stealer_), itemset_buf_(itemset_buf_), log_(log_), timer_(
 					timer_) {
 	}
 	// Search fields
@@ -39,6 +39,22 @@ struct TreeSearchData {
 	VariableLengthItemsetStack * give_stack_;
 	StealState* stealer_;
 	int* itemset_buf_; // Itemset = state.
+
+//	struct Node {
+//		int* itemset_buf_;
+//		int getNumberOfItems() {
+//			return ((-1) * itemset_buf_[0] - 1);
+//		}
+//		int getSupport() {
+//			return itemset_buf_[1];
+//		}
+//		std::vector<int> getItems() {
+//			// TODO: move?
+//			std::vector<int> items(itemset_buf_ + 2,
+//					itemset_buf_ + 2 + getNumberOfItems());
+//			return items;
+//		}
+//	};
 
 	// Utils // TODO: put in mpi_data
 	Log *log_;
@@ -50,6 +66,13 @@ struct TreeSearchData {
 //	Database<uint64> * d_;
 //	LampGraph<uint64> * g_;
 //	VariableBitsetHelper<uint64> * bsh_; // bitset helper
+};
+
+struct ContinuousPatternMiningData {
+	ContinuousPatternMiningData(ContDatabase* d_) :
+			d_(d_) {
+	}
+	ContDatabase * d_;
 };
 
 struct BinaryPatternMiningData {
@@ -66,8 +89,10 @@ struct BinaryPatternMiningData {
 
 struct GetMinSupData {
 	GetMinSupData(int lambda_max, int lambda, long long int* cs_thr,
-			long long int * dtd_accum_array_base, long long int * accum_array,
-			long long int * dtd_accum_recv_base, long long int * accum_recv) :
+			long long int * dtd_accum_array_base,
+			long long int * accum_array,
+			long long int * dtd_accum_recv_base,
+			long long int * accum_recv) :
 			lambda_max_(lambda_max), lambda_(lambda), cs_thr_(cs_thr), dtd_accum_array_base_(
 					dtd_accum_array_base), accum_array_(accum_array), dtd_accum_recv_base_(
 					dtd_accum_recv_base), accum_recv_(accum_recv) {
@@ -90,8 +115,9 @@ struct GetTestableData {
 	GetTestableData(int lambda_max_minus_one,
 			VariableLengthItemsetStack * freq_stack,
 			std::multimap<double, int *>* freq_map, double sig_level) :
-			freqThreshold_(lambda_max_minus_one), freq_stack_(freq_stack), freq_map_(
-					freq_map), sig_level_(sig_level) {
+			freqThreshold_(lambda_max_minus_one), freq_stack_(
+					freq_stack), freq_map_(freq_map), sig_level_(
+					sig_level) {
 	}
 	int freqThreshold_;
 	// Retrun variables. Used for GetSignificantPatterns.
@@ -103,11 +129,13 @@ struct GetTestableData {
 
 struct GetSignificantData {
 	GetSignificantData(VariableLengthItemsetStack * freq_stack_,
-			std::multimap<double, int *>* freq_map_, double final_sig_level_,
+			std::multimap<double, int *>* freq_map_,
+			double final_sig_level_,
 			VariableLengthItemsetStack * significant_stack_,
 			std::set<SignificantSetResult, sigset_compare>* significant_set_) :
 			freq_stack_(freq_stack_), freq_map_(freq_map_), final_sig_level_(
-					final_sig_level_), significant_stack_(significant_stack_), significant_set_(
+					final_sig_level_), significant_stack_(
+					significant_stack_), significant_set_(
 					significant_set_) {
 	}
 	VariableLengthItemsetStack * freq_stack_; // record freq itemsets
@@ -118,20 +146,23 @@ struct GetSignificantData {
 };
 
 struct MPI_Data {
-	MPI_Data(int buffer_size, int rank, int nu_proc, int n, bool n_is_ms, int w,
-			int m, int l, int k_echo_tree_branch, DTD* dtd_) :
-			dtd_(dtd_), mpiRank_(rank), nTotalProc_(nu_proc), granularity_(n), isGranularitySec_(
-					n_is_ms), nRandStealTrials_(w), nRandStealCands_(m), lHypercubeEdge_(
-					l), hypercubeDimension_(
-					ComputeZ(nTotalProc_, lHypercubeEdge_)), rng_(mpiRank_), dst_p_(
-					0, nTotalProc_ - 1), dst_m_(0, nRandStealCands_ - 1), rand_p_(
-					rng_, dst_p_), rand_m_(rng_, dst_m_), echo_waiting_(false), waiting_(
+	MPI_Data(int buffer_size, int rank, int nu_proc, int n,
+			bool n_is_ms, int w, int m, int l, int k_echo_tree_branch,
+			DTD* dtd_) :
+			dtd_(dtd_), mpiRank_(rank), nTotalProc_(nu_proc), granularity_(
+					n), isGranularitySec_(n_is_ms), nRandStealTrials_(
+					w), nRandStealCands_(m), lHypercubeEdge_(l), hypercubeDimension_(
+					ComputeZ(nTotalProc_, lHypercubeEdge_)), rng_(
+					mpiRank_), dst_p_(0, nTotalProc_ - 1), dst_m_(0,
+					nRandStealCands_ - 1), rand_p_(rng_, dst_p_), rand_m_(
+					rng_, dst_m_), echo_waiting_(false), waiting_(
 					false) {
 		// Initializing temporary variables in parenths.
 		processing_node_ = false;
 		bsend_buffer_ = new int[buffer_size];
 
-		int ret = MPI_Buffer_attach(bsend_buffer_, buffer_size * sizeof(int));
+		int ret = MPI_Buffer_attach(bsend_buffer_,
+				buffer_size * sizeof(int));
 		if (ret != MPI_SUCCESS) {
 			throw std::bad_alloc();
 		}
@@ -202,7 +233,8 @@ struct MPI_Data {
 
 			for (int k = 1; k < lHypercubeEdge_; k++) { // loop over an edge of the hypercube
 				int base = mpiRank_ - mpiRank_ % next_radix; // lowest in the current ring
-				int index = (mpiRank_ + next_radix - radix) % next_radix;
+				int index = (mpiRank_ + next_radix - radix)
+						% next_radix;
 				int lifeline_buddy = base + index; // previous in the current ring
 				if (lifeline_buddy < nTotalProc_) {
 					lifelines_[lifeline_buddy_id++] = lifeline_buddy;
@@ -242,8 +274,10 @@ struct MPI_Data {
 	boost::mt19937 rng_; // use seed as rank
 	boost::uniform_smallint<int> dst_p_;
 	boost::uniform_smallint<int> dst_m_;
-	boost::variate_generator<boost::mt19937&, boost::uniform_smallint<int> > rand_p_;
-	boost::variate_generator<boost::mt19937&, boost::uniform_smallint<int> > rand_m_;
+	boost::variate_generator<boost::mt19937&,
+			boost::uniform_smallint<int> > rand_p_;
+	boost::variate_generator<boost::mt19937&,
+			boost::uniform_smallint<int> > rand_m_;
 
 	// TODO: Initialized by mp_dfs. Need to put in here.
 	int bcast_source_;

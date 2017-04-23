@@ -23,6 +23,8 @@ ParallelDFS::~ParallelDFS() {
 }
 
 void ParallelDFS::Search() {
+
+	printf("ParallelDFS::Search\n");
 	DBG(D(1) << "MainLoop" << std::endl
 	;
 	);

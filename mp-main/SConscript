@@ -34,5 +34,5 @@ import os
 Import('env')
 env = env.Clone()
 
-for prog in Glob('*.cc'):
+for prog in Glob('cont-lamp.cc'):
 	env.Program(prog)

@@ -200,15 +200,15 @@ def MPIBuild(mode, compile_flags):
     SConscript(os.path.join(mpi_build_dir, 'mp-main', 'SConscript'))
 
     if mode == 'opt':
-        Command("bin-lamp", os.path.join(mpi_build_dir, "mp-main",
-                                        "bin-lamp"), Copy("$TARGET", "$SOURCE"))
+        Command("cont-lamp", os.path.join(mpi_build_dir, "mp-main",
+                                        "cont-lamp"), Copy("$TARGET", "$SOURCE"))
 
 
 # opt build
-Build(mode='opt', compile_flags='-O3 -DNDEBUG')
+Build(mode='opt', compile_flags='-O3 -DNDEBUG -std=c++11')
 # dbg build
 if int(debug):
-    Build(mode='dbg', compile_flags='-g')
+    Build(mode='dbg', compile_flags='-g -std=c++11')
 
 
 # profile build for gprof? google profiler?
@@ -219,12 +219,12 @@ if int(debug):
 mpi_build_dir_base = 'mp_build'
 
 # mpi opt build
-MPIBuild(mode='opt', compile_flags='-O3 -DNDEBUG -DOPTLOG')
+MPIBuild(mode='opt', compile_flags='-O3 -DNDEBUG -DOPTLOG -std=c++11')
 
 # mpi dbg build
 if int(debug):
-    MPIBuild(mode='dbg', compile_flags='-g')
+    MPIBuild(mode='dbg', compile_flags='-g -std=c++11')
 
 # mpi log build
 if int(log):
-    MPIBuild(mode='log', compile_flags='-O3 -DNDEBUG')
+    MPIBuild(mode='log', compile_flags='-O3 -DNDEBUG -std=c++11')

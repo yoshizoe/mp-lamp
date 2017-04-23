@@ -70,7 +70,9 @@ public:
 
 	~VariableLengthItemsetStack();
 
-	int* Push(int * item, int support_num);
+//	int* Push(int * item, int support_num);
+
+	std::vector<int> getItems(int* index);
 
 	// move top_ and inc nu_itemset_;
 	void PushPre();
@@ -81,6 +83,7 @@ public:
 
 	bool SetItemNum(int * index, int num);
 	bool SetSup(int * index, int sup);
+	bool SetSup(int * index, double freq);
 	bool SetOneItem(int * index, int item_num, int item);
 
 	bool PushOneItem(int item);
@@ -90,6 +93,7 @@ public:
 
 	static int GetItemNum(const int * index);
 	static int GetSup(const int * index);
+	static double GetSupDouble(int * index);
 	static int * GetItemArray(int * index);
 	static const int * GetItemArray(const int * index);
 

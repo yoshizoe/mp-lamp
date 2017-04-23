@@ -38,7 +38,8 @@
 
 namespace lamp_search {
 
-VariableLengthItemsetStack::VariableLengthItemsetStack(std::size_t size) :
+VariableLengthItemsetStack::VariableLengthItemsetStack(
+		std::size_t size) :
 		stack_(NULL), top_(NULL) {
 	//assert(size >= kMaxItemsPerSet + SENTINEL);
 
@@ -61,14 +62,21 @@ VariableLengthItemsetStack::~VariableLengthItemsetStack() {
 	// if (sup_hist_) delete [] sup_hist_;
 }
 
-// NoSort?
-int* VariableLengthItemsetStack::Push(int * item, int support_num) {
-	PushPre();
-	int* ret = Top();
-//	CopyItem(item, ret);
-//	SetSup(ret, support_num);
-//	PushPostNoSort();
-	return ret;
+//// NoSort?
+//int* VariableLengthItemsetStack::Push(int * item, int support_num) {
+//	PushPre();
+//	int* ret = Top();
+////	CopyItem(item, ret);
+////	SetSup(ret, support_num);
+////	PushPostNoSort();
+//	return ret;
+//}
+
+std::vector<int> VariableLengthItemsetStack::getItems(int* index) {
+	int numberOfItems = GetItemNum(index);
+	int* array = GetItemArray(index);
+	std::vector<int> items(array, array + numberOfItems);
+	return items;
 }
 
 void VariableLengthItemsetStack::PushPre() {
@@ -124,8 +132,19 @@ bool VariableLengthItemsetStack::SetSup(int * index, int sup) {
 	return true;
 }
 
+bool VariableLengthItemsetStack::SetSup(int * index, double freq) {
+	if (used_capacity_ + SUP >= total_capacity_)
+		return false;
+	index[SUP] = *reinterpret_cast<int*>(&freq);
+	return true;
+}
+
 int VariableLengthItemsetStack::GetSup(const int * index) {
 	return index[SUP];
+}
+
+double VariableLengthItemsetStack::GetSupDouble(int * index) {
+	return *reinterpret_cast<double*>(&index[SUP]);
 }
 
 bool VariableLengthItemsetStack::SetOneItem(int * index, int item_num,
@@ -168,7 +187,8 @@ int * VariableLengthItemsetStack::GetItemArray(int * index) {
 	return &(index[ITM]);
 }
 
-const int * VariableLengthItemsetStack::GetItemArray(const int * index) {
+const int * VariableLengthItemsetStack::GetItemArray(
+		const int * index) {
 	return &(index[ITM]);
 }
 
@@ -177,7 +197,8 @@ int VariableLengthItemsetStack::GetNthItem(const int * index,
 	return GetItemArray(index)[n];
 }
 
-void VariableLengthItemsetStack::CopyItem(const int * src, int * dst) {
+void VariableLengthItemsetStack::CopyItem(const int * src,
+		int * dst) {
 	int num = GetItemNum(src);
 
 	dst[NUM] = src[NUM];
@@ -193,7 +214,8 @@ int * VariableLengthItemsetStack::NextItemset(int * index) const {
 	return index + num + ITM;
 }
 
-bool VariableLengthItemsetStack::Exist(const int * index, int item) const {
+bool VariableLengthItemsetStack::Exist(const int * index,
+		int item) const {
 	int n = GetItemNum(index);
 
 	for (int i = 0; i < n; i++) {
@@ -237,7 +259,8 @@ void VariableLengthItemsetStack::RemoveOneItemset() {
 //   sup_hist_[ GetSup(index) ]--;
 // }
 
-int VariableLengthItemsetStack::Split(VariableLengthItemsetStack * dst) {
+int VariableLengthItemsetStack::Split(
+		VariableLengthItemsetStack * dst) {
 	if (NuItemset() == 0)
 		return 0;
 
@@ -293,7 +316,8 @@ int VariableLengthItemsetStack::Split(VariableLengthItemsetStack * dst) {
 	return given_num;
 }
 
-bool VariableLengthItemsetStack::Merge(VariableLengthItemsetStack * src) {
+bool VariableLengthItemsetStack::Merge(
+		VariableLengthItemsetStack * src) {
 	// check capacity
 	if (this->UsedCapacity() + (src->UsedCapacity() - SENTINEL - 1)
 			> this->TotalCapacity())
@@ -359,7 +383,8 @@ void VariableLengthItemsetStack::Clear() {
 	//   sup_hist_[i] = 0;
 }
 
-std::ostream& VariableLengthItemsetStack::PrintAll(std::ostream & out) const {
+std::ostream& VariableLengthItemsetStack::PrintAll(
+		std::ostream & out) const {
 	std::stringstream s;
 
 	int * p = FirstItemset();
@@ -390,7 +415,8 @@ std::ostream& VariableLengthItemsetStack::Print(std::ostream & out,
 }
 
 std::ostream& VariableLengthItemsetStack::Print(std::ostream & out,
-		const std::vector<std::string> * item_names, const int * index) const {
+		const std::vector<std::string> * item_names,
+		const int * index) const {
 	std::stringstream s;
 
 	int n = GetItemNum(index);
