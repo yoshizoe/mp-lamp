@@ -11,6 +11,7 @@
 #include <string>
 #include <algorithm>
 #include <sstream>
+#include <boost/math/distributions/chi_squared.hpp>
 using namespace std;
 
 namespace lamp_search {
@@ -32,7 +33,7 @@ ContDatabase::ContDatabase(std::istream& features,
 
 // read a database file
 void ContDatabase::readFromCSV(istream& ifs, int dim_limit,
-		bool reverse) {
+bool reverse) {
 	std::vector<std::vector<Ftype>> transposed;
 	assert(features.empty());
 	assert(
@@ -157,8 +158,8 @@ std::vector<ContDatabase::Ftype> ContDatabase::GetChildrenFreq(
 }
 
 // TODO: This function is awfully complicated like a spagetti.
-bool ContDatabase::PPCExtension(VariableLengthItemsetStack * st, int* parent,
-		int new_item, int* child) {
+bool ContDatabase::PPCExtension(VariableLengthItemsetStack * st,
+		int* parent, int new_item, int* child) {
 	// TODO: Prune a node if it is not PPCExtension.
 	st->CopyItem(parent, child);
 	st->PushOneItem(new_item);
@@ -167,6 +168,7 @@ bool ContDatabase::PPCExtension(VariableLengthItemsetStack * st, int* parent,
 
 double ContDatabase::CalculatePValue(Ftype total_freqs,
 		std::vector<Ftype>& itemset_freqs) {
+	// TODO: what is it all about?
 	// Calculate PValue...
 	Ftype positive_freqs = 0;
 //	int positive items
@@ -178,6 +180,47 @@ double ContDatabase::CalculatePValue(Ftype total_freqs,
 	// TODO: calculate P value using total_freqs and positive_freqs.
 	// TODO: For testing let's assume everything is significant.
 	return (double) positive_freqs;
+}
+
+double ContDatabase::CalculatePMin(Ftype total_freqs,
+		std::vector<Ftype>& itemset_freqs) {
+	// TODO: Implement p-min. // Take from Sugiyama's code.
+	return computePvalue(
+			kl_max_fast(total_freqs, nu_transactions_ - nu_pos_total_,
+					nu_transactions_), nu_transactions_);
+
+}
+
+/**
+ * Things I have to understand
+ */
+// Sugiyama's code
+// compute p-value
+double ContDatabase::computePvalue(double kl, int N) {
+	boost::math::chi_squared chisq_dist(1);
+	// else pval = 1 - boost::math::cdf(chisq_dist, 2 * (double)N * kl);
+	// if (pval > 1) pval = 1.0;
+	// if (VERBOSE) cout << "kl: " << kl << endl;
+	double pval = 0.0;
+	if (kl <= pow(10, -8))
+		pval = 1.0;
+	else
+		pval = 1 - boost::math::cdf(chisq_dist, 2 * (double) N * kl);
+	return pval;
+}
+
+// TODO: ???
+// Sugiyama's code
+double ContDatabase::kl_max_fast(double freq, int N0, int N) {
+	double r0 = (double) N0 / (double) N;
+	if (freq < r0)
+		return freq * log(1 / r0)
+				+ (r0 - freq) * log((r0 - freq) / (r0 - r0 * freq))
+				+ (1 - r0) * log(1 / (1 - freq));
+	else
+		return r0 * log(1 / freq)
+				+ (freq - r0) * log((freq - r0) / (freq - freq * r0))
+				+ (1 - freq) * log(1 / (1 - r0));
 }
 
 void ContDatabase::ShowInfo() {

@@ -461,37 +461,37 @@ void MP_CONT_LAMP::Search() {
 		node_stack_->PushPostNoSort();
 	}
 
-	double int_sig_lev = 0.0;
-	if (mpi_data_.mpiRank_ == 0) {
-		int_sig_lev = GetInterimSigLevel(lambda_);
-	}
+//	double int_sig_lev = 0.0;
+//	if (mpi_data_.mpiRank_ == 0) {
+//		int_sig_lev = GetInterimSigLevel(lambda_);
+//	}
 	// todo: reduce expand_num_
 
 	{
-		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "2nd phase start\n";
-			std::cout << "# " << "lambda=" << lambda_
-					<< "\tint_sig_lev=" << int_sig_lev
-					<< "\telapsed_time="
-					<< (timer_->Elapsed() - log_.d_.search_start_time_)
-							/ GIGA << std::endl;
-		}
+//		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+//			std::cout << "# " << "2nd phase start\n";
+//			std::cout << "# " << "lambda=" << lambda_
+//					<< "\tint_sig_lev=" << int_sig_lev
+//					<< "\telapsed_time="
+//					<< (timer_->Elapsed() - log_.d_.search_start_time_)
+//							/ GIGA << std::endl;
+//		}
 		DBG(D(2) << "---------------" << std::endl
 		;);
 		DBG(D(1) << "2nd phase start" << std::endl
 		;);
 		DBG(D(2) << "---------------" << std::endl
 		;);
-		DBG(
-				D(2) << "lambda=" << lambda_ << "\tint_sig_lev="
-						<< int_sig_lev << "\telapsed_time="
-						<< (timer_->Elapsed()
-								- log_.d_.search_start_time_) / GIGA
-						<< std::endl
-				;);
+//		DBG(
+//				D(2) << "lambda=" << lambda_ << "\tint_sig_lev="
+//						<< int_sig_lev << "\telapsed_time="
+//						<< (timer_->Elapsed()
+//								- log_.d_.search_start_time_) / GIGA
+//						<< std::endl
+//				;);
 
-		CallBcast(&int_sig_lev, 1, MPI_DOUBLE);
-		double sig_level_ = int_sig_lev;
+//		CallBcast(&int_sig_lev, 1, MPI_DOUBLE);
+		double sig_level_ = FLAGS_a;
 		gettestable_data_ = new GetTestableData(lambda_, freq_stack_,
 				&freq_map_, sig_level_);
 
@@ -575,9 +575,13 @@ void MP_CONT_LAMP::Search() {
 	freq_stack_->PrintAll(std::cout);
 
 	{
+		// TODO: FLAGS_a should be final_sig_level. For testing purpose we put alpha.
 		getsignificant_data_ = new GetSignificantData(freq_stack_,
-				&freq_map_, final_sig_level_, significant_stack_,
+				&freq_map_, FLAGS_a, significant_stack_,
 				&significant_set_);
+//		getsignificant_data_ = new GetSignificantData(freq_stack_,
+//				&freq_map_, final_sig_level_, significant_stack_,
+//				&significant_set_);
 //		GetSignificantPatterns(mpi_data_, getsignificant_data_);
 		psearch->GetSignificantPatterns(mpi_data_,
 				getsignificant_data_);

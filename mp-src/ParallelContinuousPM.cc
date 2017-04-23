@@ -395,13 +395,13 @@ void ParallelContinuousPM::ProcessNode(double freq,
 	// TODO: For continuous pattern mining calculating p value should be put later?
 	if (true) { // XXX: FLAGS_third_phase_
 		// CalculatePValue;
-		double pval = d_->CalculatePValue(freq, child_sup_buf_);
+		double pmin = d_->CalculatePMin(freq, child_sup_buf_);
 //		int pos_sup_num = bsh_->AndCount(d_->PosNeg(), child_sup_buf_);
 //		double pval = d_->PVal(sup_num, pos_sup_num);
 
 		// TODO: Store into freq_stack_
-		assert(pval >= 0.0);
-		if (pval <= gettestable_data->sig_level_) { // permits == case?
+		assert(pmin >= 0.0);
+		if (pmin <= gettestable_data->sig_level_) { // permits == case?
 			gettestable_data->freq_stack_->PushPre();
 			int * item = gettestable_data->freq_stack_->Top();
 			gettestable_data->freq_stack_->CopyItem(ppc_ext_buf,
@@ -409,7 +409,7 @@ void ParallelContinuousPM::ProcessNode(double freq,
 			gettestable_data->freq_stack_->PushPostNoSort();
 
 			gettestable_data->freq_map_->insert(
-					std::pair<double, int*>(pval, item));
+					std::pair<double, int*>(pmin, item));
 		}
 	}
 
@@ -605,14 +605,24 @@ void ParallelContinuousPM::ExtractSignificantSet() {
 	std::multimap<double, int *>::iterator it;
 	for (it = getsignificant_data->freq_map_->begin();
 			it != getsignificant_data->freq_map_->end(); ++it) {
+		// TODO: Here we should implement calculating p-value.
 // permits == case
 		if ((*it).first <= getsignificant_data->final_sig_level_) {
 			getsignificant_data->significant_stack_->PushPre();
 			int * item =
 					getsignificant_data->significant_stack_->Top();
+
 			getsignificant_data->significant_stack_->CopyItem(
 					(*it).second, item);
 			getsignificant_data->significant_stack_->PushPostNoSort();
+
+			std::vector<int> itemset =
+					treesearch_data->node_stack_->getItems(item);
+			printf("node = ");
+			for (int i = 0; i < itemset.size(); ++i) {
+				printf("%d ", itemset[i]);
+			}
+			printf("\n Pvalue = %.2f\n", (*it).first);
 		} else
 			break;
 	}

@@ -47,6 +47,8 @@ public:
 			int new_item, int* child);
 	double CalculatePValue(Ftype sup_num,
 			std::vector<Ftype>& itemset_freqs);
+	double CalculatePMin(Ftype sup_num,
+			std::vector<Ftype>& itemset_freqs);
 
 	int NumItems() const {
 		return nu_items_;
@@ -57,9 +59,13 @@ public:
 	int NumPositiveItems() const {
 		return nu_pos_total_;
 	}
-
 	void ShowInfo();
-private:
+
+protected:
+
+	double computePvalue(double kl, int N);
+	double kl_max_fast(double freq, int N0, int N);
+
 	// TODO: This should be transposed for better memory access.
 	std::vector<std::vector<Ftype> > features; // TODO: align values for each feature continuously.
 	std::vector<Ctype> classes;
