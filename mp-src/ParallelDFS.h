@@ -20,7 +20,7 @@ namespace lamp_search {
 class ParallelDFS {
 public:
 	ParallelDFS(MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
-			Timer* timer);
+			Timer* timer, std::ostream& ofs);
 	virtual ~ParallelDFS();
 	virtual void Search();
 
@@ -103,6 +103,7 @@ protected:
 	 */
 	Log* log_;
 	Timer* timer_;
+	std::ostream& lfs_;
 
 	static std::ofstream null_stream_;
 	std::ostream& D(int level, bool show_phase = true);

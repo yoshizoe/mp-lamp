@@ -37,8 +37,9 @@ namespace lamp_search {
 
 ParallelContinuousPM::ParallelContinuousPM(
 		ContinuousPatternMiningData* bpm_data, MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data, Log* log, Timer* timer) :
-		ParallelDFS(mpi_data, treesearch_data, log, timer), d_(
+		TreeSearchData* treesearch_data, Log* log, Timer* timer,
+		std::ostream& ofs) :
+		ParallelDFS(mpi_data, treesearch_data, log, timer, ofs), d_(
 				bpm_data->d_), expand_num_(0), closed_set_num_(0), phase_(
 				0), gettestable_data(NULL), getsignificant_data(
 		NULL), sup_buf_(d_->NumTransactions(), 1.0) {
@@ -199,6 +200,7 @@ bool ParallelContinuousPM::ExpandNode(MPI_Data& mpi_data,
 		for (std::vector<int>::iterator it = children.begin();
 				it != children.end(); ++it) {
 			int new_item = *it;
+			assert(0 <= new_item && new_item < d_->NumItems());
 
 			// TODO: no need for duplicate detection
 			if (treesearch_data->node_stack_->Exist(
@@ -219,7 +221,9 @@ bool ParallelContinuousPM::ExpandNode(MPI_Data& mpi_data,
 //			std::vector<int> child =
 //					treesearch_data->node_stack_->getItems(
 //							ppc_ext_buf);
-			printf("Pushed ");
+			printf("Pushed %d items:",
+					treesearch_data->node_stack_->GetItemNum(
+							ppc_ext_buf));
 			PrintItemset(ppc_ext_buf, child_sup_buf_);
 
 //			int sup_num = treesearch_data->node_stack_->GetSup(
@@ -273,7 +277,18 @@ bool ParallelContinuousPM::ExpandNode(MPI_Data& mpi_data,
 std::vector<int> ParallelContinuousPM::GetChildren(
 		std::vector<int> items) {
 	printf("GetChildren\n");
-	return d_->GetChildren(items);
+	if (items.empty()) {
+		// Edge partitioning for root node
+		std::vector<int> children = d_->GetChildren(items);
+		std::vector<int> responsible;
+		for (int i = mpi_data.mpiRank_; i < children.size(); i +=
+				mpi_data.nTotalProc_) {
+			responsible.push_back(children[i]);
+		}
+		return responsible;
+	} else {
+		return d_->GetChildren(items);
+	}
 }
 
 /**
@@ -353,7 +368,7 @@ bool ParallelContinuousPM::TestAndPushNode(int new_item) {
 			treesearch_data->itemset_buf_, new_item, ppc_ext_buf);
 
 	// TODO: Those things should be done in other class.
-	treesearch_data->node_stack_->SetSup(ppc_ext_buf, child_freq); // TODO: we can use the stack to hold double?
+//	treesearch_data->node_stack_->SetSup(ppc_ext_buf, child_freq); // TODO: we can use the stack to hold double?
 	treesearch_data->node_stack_->PushPostNoSort();
 //	printf("treesearch_data->node_stack_->PushPostNoSort() done\n");
 
@@ -376,6 +391,8 @@ void ParallelContinuousPM::ProcessNode(double freq,
 		int* ppc_ext_buf) {
 	printf("ProcessNode\n");
 	closed_set_num_++;
+
+	// TODO: For continuous pattern mining calculating p value should be put later?
 	if (true) { // XXX: FLAGS_third_phase_
 		// CalculatePValue;
 		double pval = d_->CalculatePValue(freq, child_sup_buf_);

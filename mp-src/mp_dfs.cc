@@ -604,7 +604,7 @@ void MP_LAMP::Search() {
 	BinaryPatternMiningData* bpm_data_ = new BinaryPatternMiningData(d_, bsh_,
 			sup_buf_, child_sup_buf_);
 	ParallelPatternMining* psearch = new ParallelPatternMining(bpm_data_,
-			mpi_data_, treesearch_data_, &log_, timer_);
+			mpi_data_, treesearch_data_, &log_, timer_, lfs_);
 	GetMinSupData* getminsup_data_;
 	GetTestableData* gettestable_data_;
 	GetSignificantData* getsignificant_data_;

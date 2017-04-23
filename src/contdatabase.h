@@ -32,7 +32,7 @@ public:
 	void readClassFromCSV(std::istream& ifs);
 
 	// TODO: implement
-	std::vector<int> GetChildren(int itemset_id); // TODO: Should this be in database?
+//	std::vector<int> GetChildren(int itemset_id); // TODO: Should this be in database?
 	std::vector<int> GetChildren(std::vector<int> items); // TODO: Should this be in database?
 	// TODO: implement
 	std::vector<Ftype> GetFreqArray(std::vector<int> itemset_item);

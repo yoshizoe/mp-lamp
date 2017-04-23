@@ -27,7 +27,7 @@ class ParallelContinuousPM: public ParallelDFS {
 public:
 	ParallelContinuousPM(ContinuousPatternMiningData* bpm_data,
 			MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
-			Timer* timer);
+			Timer* timer, std::ostream& ofs);
 	virtual ~ParallelContinuousPM();
 
 //	virtual void Search();

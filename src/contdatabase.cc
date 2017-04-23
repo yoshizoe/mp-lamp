@@ -87,15 +87,20 @@ void ContDatabase::readClassFromCSV(istream& ifs) {
 }
 
 // TODO: inefficient
-std::vector<int> ContDatabase::GetChildren(int itemset_id) {
-	std::vector<int> items(nu_items_);
-	for (int i = 0; i < nu_items_; ++i) {
-		items[i] = i;
-	}
-	return items;
-}
+//std::vector<int> ContDatabase::GetChildren(int itemset_id) {
+//	std::vector<int> items(nu_items_);
+//	for (int i = 0; i < nu_items_; ++i) {
+//		items[i] = i;
+//	}
+//	return items;
+//}
 
 std::vector<int> ContDatabase::GetChildren(std::vector<int> items) {
+	if (items.empty()) {
+		// Expanding root node.
+		// TODO: Generate only a responsible nodes for the root.
+	}
+
 	// Assert that items are sorted.
 	if (items.size() >= 2) {
 		for (int i = 0; i < items.size() - 1; ++i) {

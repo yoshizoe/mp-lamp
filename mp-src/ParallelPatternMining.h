@@ -24,7 +24,7 @@ namespace lamp_search {
 class ParallelPatternMining: public ParallelDFS {
 public:
 	ParallelPatternMining(BinaryPatternMiningData* bpm_data, MPI_Data& mpi_data,
-			TreeSearchData* treesearch_data, Log* log, Timer* timer);
+			TreeSearchData* treesearch_data, Log* log, Timer* timer, std::ostream& ofs);
 	virtual ~ParallelPatternMining();
 
 //	virtual void Search();

@@ -199,12 +199,16 @@ int VariableLengthItemsetStack::GetNthItem(const int * index,
 
 void VariableLengthItemsetStack::CopyItem(const int * src,
 		int * dst) {
+	printf("CopyItem\n");
 	int num = GetItemNum(src);
-
+	printf("ItemNum=%d\n", num);
 	dst[NUM] = src[NUM];
 	dst[SUP] = src[SUP];
-	for (int i = 0; i < num; i++)
+	for (int i = 0; i < num; i++) {
 		dst[i + ITM] = src[i + ITM];
+	}
+	printf("Copied Item\n");
+
 }
 
 int * VariableLengthItemsetStack::NextItemset(int * index) const {

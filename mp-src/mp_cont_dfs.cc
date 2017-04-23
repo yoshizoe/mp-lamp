@@ -414,11 +414,9 @@ void MP_CONT_LAMP::Search() {
 //	BinaryPatternMiningData* bpm_data_ = new BinaryPatternMiningData(
 //			d_, bsh_, sup_buf_, child_sup_buf_);
 	ContinuousPatternMiningData* cpm_data_ =
-			new ContinuousPatternMiningData(d_);
-//	ParallelPatternMining* psearch = new ParallelPatternMining(
-//			bpm_data_, mpi_data_, treesearch_data_, &log_, timer_);
+			new ContinuousPatternMiningData(d_);\
 	ParallelContinuousPM* psearch = new ParallelContinuousPM(
-			cpm_data_, mpi_data_, treesearch_data_, &log_, timer_);
+			cpm_data_, mpi_data_, treesearch_data_, &log_, timer_, lfs_);
 	GetTestableData* gettestable_data_;
 	GetSignificantData* getsignificant_data_;
 

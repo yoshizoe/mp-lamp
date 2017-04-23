@@ -37,8 +37,8 @@ namespace lamp_search {
 
 ParallelPatternMining::ParallelPatternMining(BinaryPatternMiningData* bpm_data,
 		MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
-		Timer* timer) :
-		ParallelDFS(mpi_data, treesearch_data, log, timer), d_(bpm_data->d_), bsh_(
+		Timer* timer, std::ostream& ofs) :
+		ParallelDFS(mpi_data, treesearch_data, log, timer, ofs), d_(bpm_data->d_), bsh_(
 				bpm_data->bsh_), sup_buf_(bpm_data->sup_buf_), child_sup_buf_(
 				bpm_data->child_sup_buf_), expand_num_(0), closed_set_num_(0), phase_(
 				0), getminsup_data(
