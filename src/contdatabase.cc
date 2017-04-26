@@ -29,7 +29,7 @@ ContDatabase::ContDatabase(std::istream& features,
 		std::istream& classes) {
 	readFromCSV(features);
 	readClassFromCSV(classes);
-//	ShowInfo();
+	ShowInfo();
 }
 
 // read a database file
@@ -63,16 +63,36 @@ bool reverse) {
 	nu_transactions_ = transposed.size();
 	nu_items_ = transposed[0].size();
 
-	features.resize(nu_items_);
+	std::vector<std::vector<Ftype>> tmp;
+	tmp.resize(nu_items_);
 	for (int i = 0; i < nu_items_; ++i) {
-		features[i].resize(nu_transactions_);
+		tmp[i].resize(nu_transactions_);
 	}
 	for (int i = 0; i < nu_items_; ++i) {
 		for (int j = 0; j < nu_transactions_; ++j) {
-			features[i][j] = transposed[j][i];
+			tmp[i][j] = transposed[j][i];
 		}
 	}
 
+	// Convert into Ranking.
+	vector<vector<Ftype>> rank = std::vector<std::vector<Ftype> >(
+			nu_items_, std::vector<Ftype>(nu_transactions_, 0));
+
+	features = vector<vector<Ftype>>(nu_items_,
+			vector<Ftype>(nu_transactions_, 0.0));
+	vector<size_t> idx(nu_transactions_);
+	for (int i = 0; i < nu_items_; ++i) {
+		vector<Ftype> freqs = tmp[i];
+		// initialize index vector
+		iota(idx.begin(), idx.end(), 0);
+		// sort indexes based on comparing values in v
+		sort(idx.begin(), idx.end(),
+				[&freqs](int i1, int i2) {return freqs[i1] < freqs[i2];});
+		for (int j = 0; j < nu_transactions_; j++) {
+			rank[i][j] = idx[j] + 1;
+			features[i][j] = (double) rank[i][j] / (double) nu_transactions_;
+		}
+	}
 }
 
 void ContDatabase::readClassFromCSV(istream& ifs) {
@@ -183,6 +203,9 @@ bool ContDatabase::PPCExtension(VariableLengthItemsetStack * st,
 
 double ContDatabase::CalculatePValue(Ftype total_freqs,
 		Ftype pos_freq) {
+	assert(0 <= pos_freq);
+	assert(pos_freq <= total_freqs);
+	assert(total_freqs <= 1.0);
 	double k = kl(total_freqs, pos_freq);
 	return computePvalue(k, nu_transactions_);
 }
@@ -210,8 +233,9 @@ double ContDatabase::CalculatePValue(
 		if (classes[j] == 1) { // TODO: which is positive? refactor.
 			pos_freqs += freqs[j];
 		}
-
 	}
+	tot_freqs /= (double) nu_transactions_;
+	pos_freqs /= (double) nu_transactions_;
 	return CalculatePValue(tot_freqs, pos_freqs);
 }
 
@@ -231,7 +255,8 @@ double ContDatabase::computePvalue(double kl, int N) {
 	if (kl <= pow(10, -8))
 		pval = 1.0;
 	else
-		pval = 1.0 - boost::math::cdf(chisq_dist, 2 * (double) N * kl);
+		pval = 1.0
+				- boost::math::cdf(chisq_dist, 2 * (double) N * kl);
 	return pval;
 }
 
@@ -239,29 +264,29 @@ double ContDatabase::computePvalue(double kl, int N) {
 // Sugiyama's code
 double ContDatabase::kl_max_fast(double freq, int N0, int N) {
 	double r0 = (double) N0 / (double) N;
-//	if (freq < r0)
-//		return freq * log(1 / r0)
-//				+ (r0 - freq) * log((r0 - freq) / (r0 - r0 * freq))
-//				+ (1 - r0) * log(1 / (1 - freq));
-//	else
-//		return r0 * log(1 / freq)
-//				+ (freq - r0) * log((freq - r0) / (freq - freq * r0))
-//				+ (1 - freq) * log(1 / (1 - r0));
-	if (freq < r0)
-		return freq * log(1.0 / r0)
+	if (freq < r0) {
+		double d = freq * log(1.0 / r0)
 				+ (r0 - freq) * log((r0 - freq) / (r0 - r0 * freq))
 				+ (1.0 - r0) * log(1.0 / (1.0 - freq));
-	else
-		return r0 * log(1.0 / freq)
+		assert(0 <= d);
+		return d;
+	} else {
+		double d = r0 * log(1.0 / freq)
 				+ (freq - r0) * log((freq - r0) / (freq - freq * r0))
 				+ (1.0 - freq) * log(1.0 / (1.0 - r0));
+		assert(0 <= d);
+		return d;
+	}
 }
 
+// TODO: Why kl < 0?
 double ContDatabase::kl(double total_freq, double pos_freq) {
 	double r1 = (double) nu_pos_total_ / (double) nu_transactions_;
 	double r0 = (double) (nu_transactions_ - nu_pos_total_)
 			/ (double) nu_transactions_;
+	assert(0 <= pos_freq);
 	assert(pos_freq <= total_freq);
+	assert(total_freq <= 1.0);
 	assert(0.0 <= r0 && r0 <= 1.0);
 	assert(0.0 <= r1 && r1 <= 1.0);
 	double neg_freq = total_freq - pos_freq;
@@ -281,9 +306,20 @@ double ContDatabase::kl(double total_freq, double pos_freq) {
 
 	double kl = 0.0;
 	for (int i = 0; i < po.size(); ++i) {
+		assert(0 <= pe[i]);
+		assert(0 <= po[i]);
 		kl += po[i] * log(po[i] / pe[i]);
 	}
-	assert(0 <= kl);
+//	if (!(0.0 <= kl)) {
+//		for (int i = 0; i < po.size(); ++i) {
+//			printf(
+//					"po[%d] = %.4f, pe[%d] = %.4f, po * log(po/pe) = %.4f\n",
+//					i, po[i], i, pe[i], po[i] * log(po[i] / pe[i]));
+//		}
+//		printf("kl = %.4f\n", kl);
+//		kl = 0.0;
+//	}
+	assert(0.0 <= kl);
 	return kl;
 }
 
@@ -303,6 +339,13 @@ void ContDatabase::ShowInfo() {
 		printf("%d ", classes[i]);
 	}
 	printf("\n");
+
+	for (int i = 0; i < nu_items_; i++) {
+		for (int j = 0; j < nu_transactions_; ++j) {
+			assert(0.0 <= features[i][j]);
+			assert(features[i][j] <= 1.001);
+		}
+	}
 }
 
 } /* namespace lamp_search */
