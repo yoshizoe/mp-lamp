@@ -29,6 +29,7 @@ ContDatabase::ContDatabase(std::istream& features,
 		std::istream& classes) {
 	readFromCSV(features);
 	readClassFromCSV(classes);
+	ShowInfo();
 }
 
 // read a database file
@@ -82,7 +83,10 @@ void ContDatabase::readClassFromCSV(istream& ifs) {
 	while (getline(ifs, line)) {
 		int cls = stoi(line);
 		classes.push_back(cls); // TODO
-		++nu_pos_total_;
+		// TODO: Which class should be the positive?
+		if (cls == 1) {
+			++nu_pos_total_;
+		}
 	}
 	assert(classes.size() == nu_transactions_);
 }
@@ -139,7 +143,18 @@ ContDatabase::Ftype ContDatabase::GetFreq(
 	for (int j = 0; j < nu_transactions_; ++j) {
 		freq += itemset_freqs[j];
 	}
-	return freq;
+	return freq / (double) nu_transactions_;
+}
+
+ContDatabase::Ftype ContDatabase::GetPositiveFreq(
+		std::vector<Ftype> itemset_freqs) {
+	Ftype freq = 0;
+	for (int j = 0; j < nu_transactions_; ++j) {
+		if (classes[j] == 1) { // TODO: which is positive? refactor.
+			freq += itemset_freqs[j];
+		}
+	}
+	return freq / (double) nu_transactions_;
 }
 
 ContDatabase::Ftype ContDatabase::GetFreq(
@@ -167,28 +182,20 @@ bool ContDatabase::PPCExtension(VariableLengthItemsetStack * st,
 }
 
 double ContDatabase::CalculatePValue(Ftype total_freqs,
-		std::vector<Ftype>& itemset_freqs) {
-	// TODO: what is it all about?
-	// Calculate PValue...
-	Ftype positive_freqs = 0;
-//	int positive items
-	for (int j = 0; j < nu_transactions_; ++j) {
-		if (classes[j] == 1) {
-			positive_freqs += itemset_freqs[j];
-		}
-	}
-	// TODO: calculate P value using total_freqs and positive_freqs.
-	// TODO: For testing let's assume everything is significant.
-	return (double) positive_freqs;
+		Ftype pos_freq) {
+	double k = kl(total_freqs, pos_freq);
+	return computePvalue(k, nu_transactions_);
 }
 
-double ContDatabase::CalculatePMin(Ftype total_freqs,
-		std::vector<Ftype>& itemset_freqs) {
-	// TODO: Implement p-min. // Take from Sugiyama's code.
-	return computePvalue(
-			kl_max_fast(total_freqs, nu_transactions_ - nu_pos_total_,
-					nu_transactions_), nu_transactions_);
-
+double ContDatabase::CalculatePMin(Ftype total_freqs) {
+	assert(0.0 <= total_freqs && total_freqs <= 1.0);
+	double kl = kl_max_fast(total_freqs,
+			nu_transactions_ - nu_pos_total_, nu_transactions_);
+	double pmin = computePvalue(kl, nu_transactions_);
+	printf("frequency = %.2f, kl = %.2f, pvalue = %.2f\n",
+			total_freqs, kl, pmin);
+	assert(0.0 <= pmin && pmin <= 1.00);
+	return pmin;
 }
 
 /**
@@ -197,6 +204,8 @@ double ContDatabase::CalculatePMin(Ftype total_freqs,
 // Sugiyama's code
 // compute p-value
 double ContDatabase::computePvalue(double kl, int N) {
+	assert(0 <= kl);
+	assert(0 < N);
 	boost::math::chi_squared chisq_dist(1);
 	// else pval = 1 - boost::math::cdf(chisq_dist, 2 * (double)N * kl);
 	// if (pval > 1) pval = 1.0;
@@ -213,17 +222,57 @@ double ContDatabase::computePvalue(double kl, int N) {
 // Sugiyama's code
 double ContDatabase::kl_max_fast(double freq, int N0, int N) {
 	double r0 = (double) N0 / (double) N;
+//	if (freq < r0)
+//		return freq * log(1 / r0)
+//				+ (r0 - freq) * log((r0 - freq) / (r0 - r0 * freq))
+//				+ (1 - r0) * log(1 / (1 - freq));
+//	else
+//		return r0 * log(1 / freq)
+//				+ (freq - r0) * log((freq - r0) / (freq - freq * r0))
+//				+ (1 - freq) * log(1 / (1 - r0));
 	if (freq < r0)
-		return freq * log(1 / r0)
+		return freq * log(1.0 / r0)
 				+ (r0 - freq) * log((r0 - freq) / (r0 - r0 * freq))
-				+ (1 - r0) * log(1 / (1 - freq));
+				+ (1.0 - r0) * log(1.0 / (1.0 - freq));
 	else
-		return r0 * log(1 / freq)
+		return r0 * log(1.0 / freq)
 				+ (freq - r0) * log((freq - r0) / (freq - freq * r0))
-				+ (1 - freq) * log(1 / (1 - r0));
+				+ (1.0 - freq) * log(1.0 / (1.0 - r0));
+}
+
+double ContDatabase::kl(double total_freq, double pos_freq) {
+	double r1 = (double) nu_pos_total_ / (double) nu_transactions_;
+	double r0 = (double) (nu_transactions_ - nu_pos_total_)
+			/ (double) nu_transactions_;
+	assert(0.0 <= r0 && r0 <= 1.0);
+	assert(0.0 <= r1 && r1 <= 1.0);
+	double neg_freq = total_freq - pos_freq;
+	assert(0 <= neg_freq && neg_freq <= total_freq);
+
+	vector<double> po; // { neg_freq, pos_freq, r0 - neg_freq, r1 - pos_freq };
+	po.push_back(neg_freq);
+	po.push_back(pos_freq);
+	po.push_back(r0 - neg_freq);
+	po.push_back(r1 - pos_freq);
+
+	vector<double> pe;
+	pe.push_back(r0 * total_freq);
+	pe.push_back(r1 * total_freq);
+	pe.push_back(r0 - r0 * total_freq);
+	pe.push_back(r1 - r1 * total_freq);
+
+	double kl = 0.0;
+	for (int i = 0; i < po.size(); ++i) {
+		kl += po[i] * log(po[i] / pe[i]);
+	}
+	assert(0 <= kl);
+	return kl;
 }
 
 void ContDatabase::ShowInfo() {
+	printf("#Trans = %d, #Items = %d, #Pos Items = %d\n",
+			nu_transactions_, nu_items_, nu_pos_total_);
+
 	printf("features:\n");
 	for (int i = 0; i < nu_items_; i++) {
 		for (int j = 0; j < nu_transactions_; ++j) {

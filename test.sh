@@ -14,7 +14,7 @@ then
     exit 0
 fi
 
-./run.sh > results.txt
+./run.sh 2>&1 | tee -a results.txt
 
 haspattern=`cat results.txt | grep "# number of significant patterns=1" | wc -l`
 

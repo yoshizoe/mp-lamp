@@ -322,6 +322,14 @@ void ParallelDFS::ProbeExecute(MPI_Data& mpi_data,
 }
 
 //==============================================================================
+bool ParallelDFS::AccumCountReady(MPI_Data& mpi_data) const {
+	for (int i = 0; i < k_echo_tree_branch; i++)
+		if (mpi_data.bcast_targets_[i] >= 0 && !(mpi_data.accum_flag_[i]))
+			return false;
+	return true;
+// check only valid bcast_targets_
+// always true if leaf
+}
 
 // call this from root rank to start DTD
 void ParallelDFS::SendDTDRequest(MPI_Data& mpi_data) {

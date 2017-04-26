@@ -37,12 +37,12 @@ namespace lamp_search {
 
 ParallelContinuousPM::ParallelContinuousPM(
 		ContinuousPatternMiningData* bpm_data, MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data, Log* log, Timer* timer,
-		std::ostream& ofs) :
+		TreeSearchData* treesearch_data, double alpha, Log* log,
+		Timer* timer, std::ostream& ofs) :
 		ParallelDFS(mpi_data, treesearch_data, log, timer, ofs), d_(
-				bpm_data->d_), expand_num_(0), closed_set_num_(0), phase_(
-				0), gettestable_data(NULL), getsignificant_data(
-		NULL), sup_buf_(d_->NumTransactions(), 1.0) {
+				bpm_data->d_), alpha_(alpha), expand_num_(0), closed_set_num_(
+				0), phase_(0), gettestable_data(NULL), getsignificant_data(
+		NULL), sup_buf_(d_->NumTransactions(), 1.0), thre_freq_(0.0) {
 //	g_ = new LampGraph<uint64>(*d_); // No overhead to generate LampGraph.
 }
 
@@ -66,7 +66,7 @@ void ParallelContinuousPM::GetTestablePatterns(
 }
 
 void ParallelContinuousPM::GetSignificantPatterns(MPI_Data& mpi_data,
-		GetSignificantData* getsignificant_data) {
+		GetContSignificantData* getsignificant_data) {
 	this->getsignificant_data = getsignificant_data;
 	DBG(D(1) << "MainLoop" << std::endl
 	;);
@@ -95,6 +95,8 @@ void ParallelContinuousPM::ProcAfterProbe() {
 		// note: for phase_ 1, accum request and dtd request are unified
 		if (!mpi_data.echo_waiting_ && !mpi_data.dtd_->terminated_) {
 			if (phase_ == 2) {
+				// TODO: This sends too many DTDs?
+				// Delay this for testing purpose...?
 				if (treesearch_data->node_stack_->Empty()) {
 					SendDTDRequest(mpi_data);
 					// log_->d_.dtd_request_num_++;
@@ -114,8 +116,24 @@ void ParallelContinuousPM::ProbeExecute(MPI_Data& mpi_data,
 
 	switch (probe_tag) {
 	/**
-	 * SIGNIFICANTSET
+	 * MINIMALSUPPORT
 	 */
+	case Tag::DTD_ACCUM_REQUEST:
+//		assert(false);
+		RecvMinPValueRequest(mpi_data, probe_src); // TODO: This can be solved by polymorphism.
+		break;
+	case Tag::DTD_ACCUM_REPLY:
+//		assert(false);
+		RecvMinPValueReply(mpi_data, probe_src, probe_status);
+		break;
+	case Tag::LAMBDA:
+		assert(false);
+		RecvNewSigLevel(probe_src);
+		break;
+
+		/**
+		 * SIGNIFICANTSET
+		 */
 	case Tag::RESULT_REQUEST:
 		RecvResultRequest(mpi_data, probe_src);
 		break;
@@ -146,9 +164,13 @@ void ParallelContinuousPM::ProbeExecute(MPI_Data& mpi_data,
  */
 void ParallelContinuousPM::Check(MPI_Data& mpi_data) {
 //	printf("Check\n");
-//	if (mpi_data.mpiRank_ == 0 && phase_ == 1) {
-//		CheckCSThreshold(mpi_data);
-//	}
+	if (mpi_data.mpiRank_ == 0 && phase_ == 2) {
+//		assert(false);
+		if (!mpi_data.echo_waiting_) {
+			SendMinPValueRequest(mpi_data);
+		}
+	}
+
 	return;
 }
 
@@ -185,6 +207,8 @@ bool ParallelContinuousPM::ExpandNode(MPI_Data& mpi_data,
 				phase_ != 1
 						|| treesearch_data->node_stack_->GetItemNum(
 								treesearch_data->itemset_buf_) != 0);
+		bool isRoot = treesearch_data->node_stack_->GetItemNum(
+				treesearch_data->itemset_buf_) == 0;
 
 		int accum_period_counter_ = 0;
 
@@ -210,7 +234,9 @@ bool ParallelContinuousPM::ExpandNode(MPI_Data& mpi_data,
 			}
 			// skip existing item
 			// todo: improve speed here
-			CheckProbe(accum_period_counter_, lap_time);
+			if (!isRoot) {
+				CheckProbe(accum_period_counter_, lap_time);
+			}
 
 			if (!TestAndPushNode(new_item)) {
 				continue;
@@ -242,13 +268,13 @@ bool ParallelContinuousPM::ExpandNode(MPI_Data& mpi_data,
 
 			ProcessNode(freq, ppc_ext_buf);
 
-			assert(freq >= gettestable_data->freqThreshold_);
+			assert(freq >= thre_freq_);
 
 			// try skipping if supnum_ == sup_threshold,
 			// because if sup_num of a node equals to sup_threshold, children will have smaller sup_num
 			// therefore no need to check it's children
 			// note: skipping node_stack_ full check. allocate enough memory!
-			if (freq == gettestable_data->freqThreshold_) {
+			if (freq == thre_freq_) {
 				printf("All Children Pruned");
 				treesearch_data->node_stack_->Pop();
 			}
@@ -305,10 +331,10 @@ void ParallelContinuousPM::PopNodeFromStack() {
 	treesearch_data->node_stack_->CopyItem(
 			treesearch_data->node_stack_->Top(),
 			treesearch_data->itemset_buf_);
-	printf("copied top itemset into itemset_buf_\n");
+//	printf("copied top itemset into itemset_buf_\n");
 
 	treesearch_data->node_stack_->Pop();
-	printf("poped top itemset\n");
+//	printf("poped top itemset\n");
 
 // dbg
 	DBG(D(3) << "expanded "
@@ -326,7 +352,7 @@ void ParallelContinuousPM::PopNodeFromStack() {
 	// TODO:
 	int n = treesearch_data->node_stack_->GetItemNum(
 			treesearch_data->itemset_buf_);
-	printf("%d items in the itemset\n", n);
+//	printf("%d items in the itemset\n", n);
 	int* array = treesearch_data->node_stack_->GetItemArray(
 			treesearch_data->itemset_buf_);
 	std::vector<int> buf(array, array + n);
@@ -353,9 +379,11 @@ bool ParallelContinuousPM::TestAndPushNode(int new_item) {
 	// If the support is smaller than the required minimal support for
 	// significant pattern (=lambda), then prune it.
 
-	// TODO: freqThreshould_ should be double or Feature.
-	if (child_freq < gettestable_data->freqThreshold_) {
-		printf("Node Pruned as support < lambda\n");
+	// TODO: Can we inverse calculate the frequency from a pmin???
+//	double pmin = d_->CalculatePMin(child_freq);
+	if (child_freq < thre_freq_) {
+		printf("Node Pruned as freq %.2f < thre_freq_ %.2f\n",
+				child_freq, thre_freq_);
 		return false;
 	}
 
@@ -389,19 +417,21 @@ bool ParallelContinuousPM::TestAndPushNode(int new_item) {
 // TODO: what we need here?
 void ParallelContinuousPM::ProcessNode(double freq,
 		int* ppc_ext_buf) {
-	printf("ProcessNode\n");
+//	printf("ProcessNode\n");
 	closed_set_num_++;
 
 	// TODO: For continuous pattern mining calculating p value should be put later?
 	if (true) { // XXX: FLAGS_third_phase_
 		// CalculatePValue;
-		double pmin = d_->CalculatePMin(freq, child_sup_buf_);
+//		double pmin = d_->CalculatePMin(freq);
+//		printf("Frequency = %.2f -> Pmin = %.2f\n",
+//				d_->GetFreq(child_sup_buf_), pmin);
 //		int pos_sup_num = bsh_->AndCount(d_->PosNeg(), child_sup_buf_);
 //		double pval = d_->PVal(sup_num, pos_sup_num);
 
 		// TODO: Store into freq_stack_
-		assert(pmin >= 0.0);
-		if (pmin <= gettestable_data->sig_level_) { // permits == case?
+		assert(0.0 <= freq);
+		if (freq < thre_freq_) { // permits == case?
 			gettestable_data->freq_stack_->PushPre();
 			int * item = gettestable_data->freq_stack_->Top();
 			gettestable_data->freq_stack_->CopyItem(ppc_ext_buf,
@@ -409,7 +439,8 @@ void ParallelContinuousPM::ProcessNode(double freq,
 			gettestable_data->freq_stack_->PushPostNoSort();
 
 			gettestable_data->freq_map_->insert(
-					std::pair<double, int*>(pmin, item));
+					std::pair<double, int*>(freq, item));
+			freqs_stack_.push_back(freq);
 		}
 	}
 
@@ -417,7 +448,7 @@ void ParallelContinuousPM::ProcessNode(double freq,
 
 void ParallelContinuousPM::CheckProbe(int& accum_period_counter_,
 		long long int lap_time) {
-//	printf("CheckProbe\n");
+	printf("CheckProbe\n");
 // TODO: whatever this is trying to do, it should be factored into a function.
 //       Why is it Probing while in the expansion loop?
 	accum_period_counter_++;
@@ -479,6 +510,188 @@ bool ParallelContinuousPM::AccumCountReady(MPI_Data& mpi_data) const {
 	return true;
 // check only valid bcast_targets_
 // always true if leaf
+}
+
+/**
+ * Methods for Maintaining threshold value
+ */
+void ParallelContinuousPM::SendMinPValueRequest(MPI_Data& mpi_data) {
+	printf("SendMinPValueRequest\n");
+	int message[1];
+	message[0] = 1; // dummy
+
+	mpi_data.echo_waiting_ = true;
+
+	for (int i = 0; i < k_echo_tree_branch; i++) {
+		if (mpi_data.bcast_targets_[i] < 0)
+			break;
+		assert(
+				mpi_data.bcast_targets_[i] < mpi_data.nTotalProc_
+						&& "SendDTDAccumRequest");
+		CallBsend(message, 1, MPI_INT, mpi_data.bcast_targets_[i],
+				Tag::DTD_ACCUM_REQUEST);
+
+		DBG(
+				D(3) << "SendDTDAccumRequest: dst="
+						<< mpi_data.bcast_targets_[i] << "\ttimezone="
+						<< mpi_data.dtd_->time_zone_ << std::endl
+				;);
+	}
+}
+
+void ParallelContinuousPM::RecvMinPValueRequest(MPI_Data& mpi_data,
+		int src) {
+	printf("RecvMinPValueRequest\n");
+
+//	DBG(
+//			D(3) << "RecvDTDAccumRequest: src=" << src
+//					<< "\ttimezone=" << mpi_data.dtd_->time_zone_
+//					<< std::endl
+//			;);
+	MPI_Status recv_status;
+	int message[1];
+	CallRecv(&message, 1, MPI_INT, src, Tag::DTD_ACCUM_REQUEST,
+			&recv_status);
+
+	if (IsLeafInTopology(mpi_data))
+		SendMinPValueReply(mpi_data);
+	else
+		SendMinPValueRequest(mpi_data);
+}
+
+void ParallelContinuousPM::SendMinPValueReply(MPI_Data& mpi_data) {
+	printf("SendMinPValueReply\n");
+	std::sort(freqs_stack_.begin(), freqs_stack_.end());
+	// TODO: Apply pruning items with pmin higher than alpha/k.
+
+	int size = freqs_stack_.size();
+	CallBsend(freqs_stack_.data(), size, MPI_DOUBLE,
+			mpi_data.bcast_source_, Tag::DTD_ACCUM_REPLY);
+
+	// TODO: Integrate with terminate detection or not?
+//	mpi_data.dtd_->time_warp_ = false;
+//	mpi_data.dtd_->not_empty_ = false;
+//	mpi_data.dtd_->IncTimeZone();
+//
+	mpi_data.echo_waiting_ = false;
+	mpi_data.dtd_->ClearAccumFlags();
+	mpi_data.dtd_->ClearReduceVars();
+
+	freqs_stack_.clear();
+}
+
+// getminsup_data
+void ParallelContinuousPM::RecvMinPValueReply(MPI_Data& mpi_data,
+		int src, MPI_Status* probe_status) {
+	printf("RecvMinPValueReply\n");
+
+//	MPI_Status recv_status;
+	// TODO: get status from caller
+	int num = 0;
+	MPI_Get_count(probe_status, MPI_DOUBLE, &num);
+	int prev_size = freqs_stack_.size();
+	freqs_stack_.resize(prev_size + num);
+
+//	std::vector<double> buffer(num);
+//	pmins_stack_
+	// TODO: single data is not enough!
+	CallRecv(&(freqs_stack_[prev_size]), num,
+	MPI_DOUBLE, src, Tag::DTD_ACCUM_REPLY, probe_status);
+	assert(src == probe_status->MPI_SOURCE);
+
+	// TODO?
+	bool flag = false;
+	for (int i = 0; i < k_echo_tree_branch; i++) {
+		if (mpi_data.bcast_targets_[i] == src) {
+			flag = true;
+			mpi_data.dtd_->accum_flag_[i] = true;
+			break;
+		}
+	}
+	assert(flag);
+
+	if (mpi_data.mpiRank_ == 0) {
+		if (DTDReplyReady(mpi_data)) {
+			CalculateThreshold();
+			mpi_data.waiting_ = false;
+		}
+		// TODO: Broadcast Threshold!
+
+// if SendLambda is called, dtd_.count_ is incremented and DTDCheck will always fail
+//		if (DTDReplyReady(mpi_data)) {
+//			DTDCheck(mpi_data);
+//			log_->d_.dtd_accum_phase_num_++;
+//		}
+	} else {  // not root
+		if (DTDReplyReady(mpi_data)) {
+			// TODO: Merge and sort pmins_stack here for efficiency.
+			SendMinPValueReply(mpi_data);
+		}
+	}
+}
+
+void ParallelContinuousPM::CalculateThreshold() {
+	// pmin_stack_ has a stack of pmins from all the processes.
+	// Our goal here is to find an improved threshold which satisfies pmin(k) = alpha/k.
+	// TODO: Binary search may be more efficient.
+	// Sort is already inefficient.
+	std::sort(freqs_stack_.begin(), freqs_stack_.end());
+
+	for (int i = 0; i < freqs_stack_.size(); ++i) {
+		double pmin = d_->CalculatePMin(freqs_stack_[i]);
+		if (i * pmin >= alpha_) {
+			// The itemset exceeds the threshold!!!
+			assert(freqs_stack_[i] < thre_freq_);
+			thre_freq_ = freqs_stack_[i];
+			printf(
+					"Exceeds the threshold: %d*%.2f>=%.2f. "
+					"New thre_freqs_ is %.2f.\n",
+					i, pmin, alpha_, freqs_stack_[i]);
+			SendNewSigLevel(freqs_stack_[i]);
+			break;
+		}
+	}
+}
+
+/**
+ * GetMinSup Functions
+ *
+ *
+ */
+void ParallelContinuousPM::SendNewSigLevel(double sig_level) {
+// send lambda to bcast_targets_
+	printf("SendNewSigLevel is not implemented yet.\n");
+	assert(false);
+	return;
+	for (int i = 0; i < k_echo_tree_branch; i++) {
+		if (mpi_data.bcast_targets_[i] < 0)
+			break;
+		assert(
+				mpi_data.bcast_targets_[i] < mpi_data.nTotalProc_
+						&& "SendLambda");
+		CallBsend(&sig_level, 1, MPI_DOUBLE,
+				mpi_data.bcast_targets_[i], Tag::LAMBDA);
+
+		DBG(
+				D(2) << "SendLambda: dst="
+						<< mpi_data.bcast_targets_[i] << "\tlambda="
+						<< sig_level << "\tdtd_count="
+						<< mpi_data.dtd_->count_ << std::endl
+				;);
+	}
+}
+
+void ParallelContinuousPM::RecvNewSigLevel(int src) {
+	MPI_Status recv_status;
+	double msg = -1.0;
+
+	CallRecv(&msg, 1, MPI_DOUBLE, src, Tag::LAMBDA, &recv_status);
+	assert(msg >= 0.0);
+	if (msg < gettestable_data->sig_level_) {
+		SendNewSigLevel(msg);
+		gettestable_data->sig_level_ = msg;
+// todo: do database reduction
+	}
 }
 
 /**
@@ -636,10 +849,10 @@ void ParallelContinuousPM::PrintItemset(int* itembuf,
 	for (int i = 0; i < itemset.size(); ++i) {
 		printf("%d ", itemset[i]);
 	}
-	printf("\nFreq = ");
-	for (int i = 0; i < freqs.size(); ++i) {
-		printf("%.2f ", freqs[i]);
-	}
+//	printf("\nFreq = ");
+//	for (int i = 0; i < freqs.size(); ++i) {
+//		printf("%.2f ", freqs[i]);
+//	}
 	printf("\n");
 }
 

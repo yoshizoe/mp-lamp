@@ -26,7 +26,7 @@ class ParallelContinuousPM: public ParallelDFS {
 	typedef int Class;
 public:
 	ParallelContinuousPM(ContinuousPatternMiningData* bpm_data,
-			MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
+			MPI_Data& mpi_data, TreeSearchData* treesearch_data, double alpha, Log* log,
 			Timer* timer, std::ostream& ofs);
 	virtual ~ParallelContinuousPM();
 
@@ -35,7 +35,7 @@ public:
 //	void PreProcessRootNode(GetMinSupData* getminsup_data);
 	void GetTestablePatterns(GetTestableData* gettestable_data);
 	void GetSignificantPatterns(MPI_Data& mpi_data,
-			GetSignificantData* getsignificant_data);
+			GetContSignificantData* getsignificant_data);
 
 protected:
 	// TODO: How can we hide the dependency on those low level structures?
@@ -55,7 +55,7 @@ protected:
 //	TreeSearchData* treesearch_data;
 //	GetMinSupData* getminsup_data;
 	GetTestableData* gettestable_data;
-	GetSignificantData* getsignificant_data;
+	GetContSignificantData* getsignificant_data;
 
 //	Log* log_;
 //	Timer* timer_;
@@ -86,6 +86,21 @@ protected:
 
 	int phase_; // 1, 2, 3
 
+	/**
+	 * Methods for Maintaining threshold value
+	 */
+	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+	void SendMinPValueRequest(MPI_Data& mpi_data);
+	void RecvMinPValueRequest(MPI_Data& mpi_data, int src);
+	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+	void SendMinPValueReply(MPI_Data& mpi_data);
+	void RecvMinPValueReply(MPI_Data& mpi_data, int src, MPI_Status* probe_status);
+	void CalculateThreshold();
+	void SendNewSigLevel(double sig_level);
+	void RecvNewSigLevel(int src);
+	std::vector<double> freqs_stack_;
+	double alpha_;
+	double thre_freq_;
 	// TODO: These functions should be factored in Get
 	/**
 	 * Methods For GetSignificant

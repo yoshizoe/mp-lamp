@@ -416,9 +416,10 @@ void MP_CONT_LAMP::Search() {
 	ContinuousPatternMiningData* cpm_data_ =
 			new ContinuousPatternMiningData(d_);\
 	ParallelContinuousPM* psearch = new ParallelContinuousPM(
-			cpm_data_, mpi_data_, treesearch_data_, &log_, timer_, lfs_);
+			cpm_data_, mpi_data_, treesearch_data_, FLAGS_a, &log_, timer_,
+			lfs_);
 	GetTestableData* gettestable_data_;
-	GetSignificantData* getsignificant_data_;
+	GetContSignificantData* getsignificant_data_;
 
 	log_.d_.search_start_time_ = timer_->Elapsed();
 	total_expand_num_ = 0ll;
@@ -576,7 +577,7 @@ void MP_CONT_LAMP::Search() {
 
 	{
 		// TODO: FLAGS_a should be final_sig_level. For testing purpose we put alpha.
-		getsignificant_data_ = new GetSignificantData(freq_stack_,
+		getsignificant_data_ = new GetContSignificantData(freq_stack_,
 				&freq_map_, FLAGS_a, significant_stack_,
 				&significant_set_);
 //		getsignificant_data_ = new GetSignificantData(freq_stack_,
@@ -616,12 +617,13 @@ void MP_CONT_LAMP::Search() {
 	DBG(PrintPLog(D(1, false))
 	;);
 
-	//ClearTasks();
+//ClearTasks();
 	delete psearch;
 	delete treesearch_data_;
 	delete cpm_data_;
 	delete gettestable_data_;
 	delete getsignificant_data_;
+
 }
 
 // TODO: For continuous features we cannot get significance.
@@ -640,27 +642,32 @@ double MP_CONT_LAMP::GetInterimSigLevel(int lambda) const {
 void MP_CONT_LAMP::SortSignificantSets() {
 	int * set = significant_stack_->FirstItemset();
 	printf("SortSignificantSets is not implemented\n");
+	while (set != NULL) {
+		// calculate support from set
+		std::vector<double> sup_buf_(d_->NumTransactions(), 1.0);
+		{
+			int n = significant_stack_->GetItemNum(set);
+			// TODO: quite inefficient. Should return by reference?
+			for (int i = 0; i < n; i++) {
+				int item = significant_stack_->GetNthItem(set, i);
+				sup_buf_ = d_->GetChildrenFreq(sup_buf_, item);
 
-//	while (set != NULL) {
-//		// calculate support from set
-//		bsh_->Set(sup_buf_);
-//		{
-//			int n = significant_stack_->GetItemNum(set);
-//			for (int i = 0; i < n; i++) {
-//				int item = significant_stack_->GetNthItem(set, i);
-//				bsh_->And(d_->NthData(item), sup_buf_);
-//			}
-//		}
-//
-//		int sup_num = bsh_->Count(sup_buf_);
-//		int pos_sup_num = bsh_->AndCount(d_->PosNeg(), sup_buf_);
-//		double pval = d_->PVal(sup_num, pos_sup_num);
-//
-//		significant_set_.insert(
-//				SignificantSetResult(pval, set, sup_num, pos_sup_num,
-//						significant_stack_));
-//		set = significant_stack_->NextItemset(set);
-//	}
+			}
+		}
+		printf("");
+		for (int i = 0; i < sup_buf_.size(); ++i) {
+			printf("");
+		}
+		double freq = d_->GetFreq(sup_buf_);
+		double pos_freq = d_->GetPositiveFreq(sup_buf_);
+
+		double pval = d_->CalculatePValue(freq, pos_freq);
+
+		significant_set_.insert(
+				ContSignificantSetResult(pval, set, freq, pos_freq,
+						significant_stack_));
+		set = significant_stack_->NextItemset(set);
+	}
 }
 
 // TODO: Ideally, this should also be hidden in other class.
@@ -717,7 +724,7 @@ std::ostream & MP_CONT_LAMP::PrintSignificantSet(
 			<< significant_set_.size() << std::endl;
 	s
 			<< "# pval (raw)    pval (corr)         freq     pos        # items items\n";
-	for (std::set<SignificantSetResult, sigset_compare>::const_iterator it =
+	for (std::set<ContSignificantSetResult, cont_sigset_compare>::const_iterator it =
 			significant_set_.begin(); it != significant_set_.end();
 			++it) {
 
@@ -726,13 +733,13 @@ std::ostream & MP_CONT_LAMP::PrintSignificantSet(
 
 				<< std::setw(16) << std::left
 				<< (*it).pval_ * final_closed_set_num_ << std::right
-				<< "" << std::setw(8) << (*it).sup_num_ << ""
-				<< std::setw(8) << (*it).pos_sup_num_ << "";
-		// s << "pval (raw)="   << std::setw(16) << std::left << (*it).pval_ << std::right
-		//   << "pval (corr)="  << std::setw(16) << std::left << (*it).pval_ * final_closed_set_num_ << std::right
-		//   << "\tfreq=" << std::setw(8)  << (*it).sup_num_
-		//   << "\tpos="  << std::setw(8)  << (*it).pos_sup_num_
-		//   << "\titems";
+				<< "" << std::setw(12) << (*it).sup_num_ << ""
+				<< std::setw(12) << (*it).pos_sup_num_ << "" << std::endl;
+//		 s << "pval (raw)="   << std::setw(16) << std::left << (*it).pval_ << std::right
+//		   << "pval (corr)="  << std::setw(16) << std::left << (*it).pval_ * final_closed_set_num_ << std::right
+//		   << "\tfreq=" << std::setw(8)  << (*it).sup_num_
+//		   << "\tpos="  << std::setw(8)  << (*it).pos_sup_num_
+//		   << "\titems";
 
 		const int * item = (*it).set_;
 //		significant_stack_->Print(s, d_->ItemNames(), item);
@@ -926,36 +933,36 @@ std::ostream & MP_CONT_LAMP::PrintAggrLog(std::ostream & out) {
 			<< log_.a_.bcast_time_max_ / MEGA // max
 			<< "(ms)" << std::endl;
 
-	// s << "# accum_task_time   ="
-	//   << std::setw(16) << log_.d_.accum_task_time_ / MEGA
-	//   << std::setw(16) << log_.a_.accum_task_time_ / MEGA // sum
-	//   << std::setw(16) << log_.a_.accum_task_time_ / MEGA / p_ // avg
-	//   << "(ms)" << std::endl;
-	// s << "# accum_task_num    ="
-	//   << std::setw(16) << log_.d_.accum_task_num_
-	//   << std::setw(16) << log_.a_.accum_task_num_ // sum
-	//   << std::setw(16) << log_.a_.accum_task_num_ / p_ // avg
-	//   << std::endl;
-	// s << "# basic_task_time   ="
-	//   << std::setw(16) << log_.d_.basic_task_time_ / MEGA
-	//   << std::setw(16) << log_.a_.basic_task_time_ / MEGA // sum
-	//   << std::setw(16) << log_.a_.basic_task_time_ / MEGA / p_ // avg
-	//   << "(ms)" << std::endl;
-	// s << "# basic_task_num    ="
-	//   << std::setw(16) << log_.d_.basic_task_num_
-	//   << std::setw(16) << log_.a_.basic_task_num_ // sum
-	//   << std::setw(16) << log_.a_.basic_task_num_ / p_ // avg
-	//   << std::endl;
-	// s << "# control_task_time ="
-	//   << std::setw(16) << log_.d_.control_task_time_ / MEGA
-	//   << std::setw(16) << log_.a_.control_task_time_ / MEGA // sum
-	//   << std::setw(16) << log_.a_.control_task_time_ / MEGA / p_ // avg
-	//   << "(ms)" << std::endl;
-	// s << "# control_task_num  ="
-	//   << std::setw(16) << log_.d_.control_task_num_
-	//   << std::setw(16) << log_.a_.control_task_num_ // sum
-	//   << std::setw(16) << log_.a_.control_task_num_ / p_ // avg
-	//   << std::endl;
+// s << "# accum_task_time   ="
+//   << std::setw(16) << log_.d_.accum_task_time_ / MEGA
+//   << std::setw(16) << log_.a_.accum_task_time_ / MEGA // sum
+//   << std::setw(16) << log_.a_.accum_task_time_ / MEGA / p_ // avg
+//   << "(ms)" << std::endl;
+// s << "# accum_task_num    ="
+//   << std::setw(16) << log_.d_.accum_task_num_
+//   << std::setw(16) << log_.a_.accum_task_num_ // sum
+//   << std::setw(16) << log_.a_.accum_task_num_ / p_ // avg
+//   << std::endl;
+// s << "# basic_task_time   ="
+//   << std::setw(16) << log_.d_.basic_task_time_ / MEGA
+//   << std::setw(16) << log_.a_.basic_task_time_ / MEGA // sum
+//   << std::setw(16) << log_.a_.basic_task_time_ / MEGA / p_ // avg
+//   << "(ms)" << std::endl;
+// s << "# basic_task_num    ="
+//   << std::setw(16) << log_.d_.basic_task_num_
+//   << std::setw(16) << log_.a_.basic_task_num_ // sum
+//   << std::setw(16) << log_.a_.basic_task_num_ / p_ // avg
+//   << std::endl;
+// s << "# control_task_time ="
+//   << std::setw(16) << log_.d_.control_task_time_ / MEGA
+//   << std::setw(16) << log_.a_.control_task_time_ / MEGA // sum
+//   << std::setw(16) << log_.a_.control_task_time_ / MEGA / p_ // avg
+//   << "(ms)" << std::endl;
+// s << "# control_task_num  ="
+//   << std::setw(16) << log_.d_.control_task_num_
+//   << std::setw(16) << log_.a_.control_task_num_ // sum
+//   << std::setw(16) << log_.a_.control_task_num_ / p_ // avg
+//   << std::endl;
 
 	s << "# dtd_phase_num_    =" << std::setw(16)
 			<< log_.d_.dtd_phase_num_ << std::endl;
@@ -966,19 +973,19 @@ std::ostream & MP_CONT_LAMP::PrintAggrLog(std::ostream & out) {
 	s << "# dtd_ac_ph_per_sec_=" << std::setw(16)
 			<< log_.d_.dtd_accum_phase_per_sec_ << std::endl;
 
-	// s << "# dtd_request_num   ="
-	//   << std::setw(16) << log_.d_.dtd_request_num_
-	//   << std::endl;
-	// s << "# dtd_reply_num     ="
-	//   << std::setw(16) << log_.d_.dtd_reply_num_
-	//   << std::endl;
+// s << "# dtd_request_num   ="
+//   << std::setw(16) << log_.d_.dtd_request_num_
+//   << std::endl;
+// s << "# dtd_reply_num     ="
+//   << std::setw(16) << log_.d_.dtd_reply_num_
+//   << std::endl;
 
-	// s << "# accum_phase_num_  ="
-	//   << std::setw(16) << log_.d_.accum_phase_num_
-	//   << std::endl;
-	// s << "# accum_ph_per_sec_ ="
-	//   << std::setw(16) << log_.d_.accum_phase_per_sec_
-	//   << std::endl;
+// s << "# accum_phase_num_  ="
+//   << std::setw(16) << log_.d_.accum_phase_num_
+//   << std::endl;
+// s << "# accum_ph_per_sec_ ="
+//   << std::setw(16) << log_.d_.accum_phase_per_sec_
+//   << std::endl;
 
 	s << "# lfl_steal_num     =" << std::setw(16)
 			<< log_.d_.lifeline_steal_num_ << std::setw(16)
@@ -1231,24 +1238,24 @@ std::ostream & MP_CONT_LAMP::PrintLog(std::ostream & out) const {
 	s << "# bcast_time_max    =" << std::setw(16)
 			<< log_.d_.bcast_time_max_ / MEGA << "(ms)" << std::endl;
 
-	// s << "# accum_task_time   ="
-	//   << std::setw(16) << log_.d_.accum_task_time_ / MEGA
-	//   << "(ms)" << std::endl;
-	// s << "# accum_task_num    ="
-	//   << std::setw(16) << log_.d_.accum_task_num_
-	//   << std::endl;
-	// s << "# basic_task_time   ="
-	//   << std::setw(16) << log_.d_.basic_task_time_ / MEGA
-	//   << "(ms)" << std::endl;
-	// s << "# basic_task_num    ="
-	//   << std::setw(16) << log_.d_.basic_task_num_
-	//   << std::endl;
-	// s << "# control_task_time ="
-	//   << std::setw(16) << log_.d_.control_task_time_ / MEGA
-	//   << "(ms)" << std::endl;
-	// s << "# control_task_num  ="
-	//   << std::setw(16) << log_.d_.control_task_num_
-	//   << std::endl;
+// s << "# accum_task_time   ="
+//   << std::setw(16) << log_.d_.accum_task_time_ / MEGA
+//   << "(ms)" << std::endl;
+// s << "# accum_task_num    ="
+//   << std::setw(16) << log_.d_.accum_task_num_
+//   << std::endl;
+// s << "# basic_task_time   ="
+//   << std::setw(16) << log_.d_.basic_task_time_ / MEGA
+//   << "(ms)" << std::endl;
+// s << "# basic_task_num    ="
+//   << std::setw(16) << log_.d_.basic_task_num_
+//   << std::endl;
+// s << "# control_task_time ="
+//   << std::setw(16) << log_.d_.control_task_time_ / MEGA
+//   << "(ms)" << std::endl;
+// s << "# control_task_num  ="
+//   << std::setw(16) << log_.d_.control_task_num_
+//   << std::endl;
 
 	s << "# dtd_phase_num_    =" << std::setw(16)
 			<< log_.d_.dtd_phase_num_ << std::endl;
@@ -1259,19 +1266,19 @@ std::ostream & MP_CONT_LAMP::PrintLog(std::ostream & out) const {
 	s << "# dtd_ac_ph_per_sec_=" << std::setw(16)
 			<< log_.d_.dtd_accum_phase_per_sec_ << std::endl;
 
-	// s << "# dtd_request_num   ="
-	//   << std::setw(16) << log_.d_.dtd_request_num_
-	//   << std::endl;
-	// s << "# dtd_reply_num     ="
-	//   << std::setw(16) << log_.d_.dtd_reply_num_
-	//   << std::endl;
+// s << "# dtd_request_num   ="
+//   << std::setw(16) << log_.d_.dtd_request_num_
+//   << std::endl;
+// s << "# dtd_reply_num     ="
+//   << std::setw(16) << log_.d_.dtd_reply_num_
+//   << std::endl;
 
-	// s << "# accum_phase_num_  ="
-	//   << std::setw(16) << log_.d_.accum_phase_num_
-	//   << std::endl;
-	// s << "# accum_phase_per_sec_  ="
-	//   << std::setw(16) << log_.d_.accum_phase_per_sec_
-	//   << std::endl;
+// s << "# accum_phase_num_  ="
+//   << std::setw(16) << log_.d_.accum_phase_num_
+//   << std::endl;
+// s << "# accum_phase_per_sec_  ="
+//   << std::setw(16) << log_.d_.accum_phase_per_sec_
+//   << std::endl;
 
 	s << "# lfl_steal_num     =" << std::setw(16)
 			<< log_.d_.lifeline_steal_num_ << std::endl;

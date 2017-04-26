@@ -152,7 +152,7 @@ private:
 	 2, descending order of item numbers
 	 3, dictionary order of items
 	 */
-	std::set<SignificantSetResult, sigset_compare> significant_set_;
+	std::set<ContSignificantSetResult, cont_sigset_compare> significant_set_;
 
 	long long int total_expand_num_;
 	long long int expand_num_;

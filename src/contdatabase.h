@@ -40,15 +40,15 @@ public:
 	Ftype GetFreq(std::vector<int> itemset_items);
 	// TODO: implement
 	Ftype GetFreq(std::vector<Ftype> itemset_freqs);
+	Ftype GetPositiveFreq(std::vector<Ftype> itemset_freqs);
 	// TODO: implement
 	std::vector<Ftype> GetChildrenFreq(
 			std::vector<Ftype>& parent_freq, int new_item);
 	bool PPCExtension(VariableLengthItemsetStack * st, int* parent,
 			int new_item, int* child);
-	double CalculatePValue(Ftype sup_num,
-			std::vector<Ftype>& itemset_freqs);
-	double CalculatePMin(Ftype sup_num,
-			std::vector<Ftype>& itemset_freqs);
+	double CalculatePValue(Ftype total_freq,
+			Ftype pos_freq);
+	double CalculatePMin(Ftype total_freqs);
 
 	int NumItems() const {
 		return nu_items_;
@@ -65,6 +65,7 @@ protected:
 
 	double computePvalue(double kl, int N);
 	double kl_max_fast(double freq, int N0, int N);
+	double kl(double total_freq, double pos_freq);
 
 	// TODO: This should be transposed for better memory access.
 	std::vector<std::vector<Ftype> > features; // TODO: align values for each feature continuously.

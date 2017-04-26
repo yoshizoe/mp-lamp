@@ -255,6 +255,7 @@ void ParallelPatternMining::ProcAfterProbe() {
 				// log_->d_.dtd_accum_request_num_++;
 			} else if (phase_ == 2) {
 				if (treesearch_data->node_stack_->Empty()) {
+					printf("Empty: root sends DTDRequest.\n");
 					SendDTDRequest(mpi_data);
 					// log_->d_.dtd_request_num_++;
 				}
@@ -766,14 +767,6 @@ void ParallelPatternMining::RecvLambda(MPI_Data& mpi_data, int src) {
 		getminsup_data->lambda_ = new_lambda;
 // todo: do database reduction
 	}
-}
-bool ParallelPatternMining::AccumCountReady(MPI_Data& mpi_data) const {
-	for (int i = 0; i < k_echo_tree_branch; i++)
-		if (mpi_data.bcast_targets_[i] >= 0 && !(mpi_data.accum_flag_[i]))
-			return false;
-	return true;
-// check only valid bcast_targets_
-// always true if leaf
 }
 
 void ParallelPatternMining::CheckCSThreshold(MPI_Data& mpi_data) {

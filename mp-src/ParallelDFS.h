@@ -41,6 +41,7 @@ protected:
 	virtual void Check(MPI_Data& mpi_data) = 0;
 	virtual bool ExpandNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data) = 0;
 
+	bool AccumCountReady(MPI_Data& mpi_data) const;
 	/**
 	 * ProbeExecute implementation
 	 */

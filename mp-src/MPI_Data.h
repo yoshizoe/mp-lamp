@@ -145,6 +145,25 @@ struct GetSignificantData {
 	std::set<SignificantSetResult, sigset_compare>* significant_set_;
 };
 
+// TODO: Duplicate. Refactor
+struct GetContSignificantData {
+	GetContSignificantData(VariableLengthItemsetStack * freq_stack_,
+			std::multimap<double, int *>* freq_map_,
+			double final_sig_level_,
+			VariableLengthItemsetStack * significant_stack_,
+			std::set<ContSignificantSetResult, cont_sigset_compare>* significant_set_) :
+			freq_stack_(freq_stack_), freq_map_(freq_map_), final_sig_level_(
+					final_sig_level_), significant_stack_(
+					significant_stack_), significant_set_(
+					significant_set_) {
+	}
+	VariableLengthItemsetStack * freq_stack_; // record freq itemsets
+	std::multimap<double, int *>* freq_map_; // record (pval, *itemsets)
+	double final_sig_level_;
+	VariableLengthItemsetStack * significant_stack_;
+	std::set<ContSignificantSetResult, cont_sigset_compare>* significant_set_;
+};
+
 struct MPI_Data {
 	MPI_Data(int buffer_size, int rank, int nu_proc, int n,
 			bool n_is_ms, int w, int m, int l, int k_echo_tree_branch,

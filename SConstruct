@@ -227,4 +227,4 @@ if int(debug):
 
 # mpi log build
 if int(log):
-    MPIBuild(mode='log', compile_flags='-O3 -DNDEBUG -std=c++11')
+    MPIBuild(mode='log', compile_flags='-O3 -std=c++11')

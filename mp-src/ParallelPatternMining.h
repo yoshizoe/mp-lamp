@@ -159,7 +159,6 @@ protected:
 	void RecvResultRequest(MPI_Data& mpi_data, int src);
 	void SendResultReply(MPI_Data& mpi_data);
 	void RecvResultReply(MPI_Data& mpi_data, int src, MPI_Status status);
-	bool AccumCountReady(MPI_Data& mpi_data) const;
 	void ExtractSignificantSet();
 
 // insert pointer into significant_map_ (do not sort the stack itself)
