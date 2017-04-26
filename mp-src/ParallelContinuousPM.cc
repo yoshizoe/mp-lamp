@@ -888,6 +888,48 @@ void ParallelContinuousPM::RecvResultReply(MPI_Data& mpi_data,
 
 void ParallelContinuousPM::ExtractSignificantSet() {
 	printf("ExtractSignificantSet\n");
+
+	// XXX: Pmin should be calculated by master node and then broadcast to the others.
+	{
+		int numItemsets = freq_stack_.size();
+
+		std::vector<std::pair<double, double>> freq_pmin;
+//	std::vector<double> pmins;
+		for (int i = 0; i < freq_stack_.size(); ++i) {
+			double pmin = d_->CalculatePMin(freq_stack_[i]);
+			if (pmin < thre_pmin_) {
+				freq_pmin.push_back(
+						std::pair<double, double>(freq_stack_[i],
+								pmin));
+			} else {
+				freq_stack_.erase(freq_stack_.begin() + i);
+			}
+		}
+		printf(
+				"%d itemsets out of %d itemsets is pmin(X) < thre_pmin\n",
+				freq_pmin.size(), numItemsets);
+		auto cmp =
+				[](std::pair<double,double> const & a, std::pair<double,double> const & b)
+				{
+					return a.first < b.first;
+				};
+		std::sort(freq_pmin.begin(), freq_pmin.end(), cmp);
+//	std::sort(pmins.begin(), pmins.end());
+		double prev_thre_freq = thre_freq_;
+		while (freq_pmin.size() * thre_pmin_ >= alpha_) {
+//		printf(
+//				"thre_freq_ %.4f is too low!: %d (|T|) * %.4f (pmin(X)) >= %.2f\n",
+//				thre_freq_, freq_pmin.size(), thre_pmin_, alpha_);
+			double min_freq = freq_pmin.begin()->first;
+			thre_freq_ = std::min(d_->NumPosRatio(), min_freq);
+			thre_pmin_ = d_->CalculatePMin(thre_freq_);
+//		printf("thre_freq updated to %.4f, thre_pmin_ = %.4f\n",
+//				thre_freq_, thre_pmin_);
+			freq_pmin.erase(freq_pmin.begin());
+			// TODO: should also remove from freq_stack_.
+		}
+	}
+
 //	double thre_bonferroni = d_->CalculatePMin(pmin_thre_);
 	std::multimap<double, int *>::iterator it;
 	printf("bonferroni corrected threshold = %.8f\n", thre_pmin_);
