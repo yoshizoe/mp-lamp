@@ -46,8 +46,7 @@ public:
 			std::vector<Ftype>& parent_freq, int new_item);
 	bool PPCExtension(VariableLengthItemsetStack * st, int* parent,
 			int new_item, int* child);
-	double CalculatePValue(Ftype total_freq,
-			Ftype pos_freq);
+	double CalculatePValue(Ftype total_freq, Ftype pos_freq);
 	double CalculatePValue(std::vector<int>& itemset_items);
 	double CalculatePMin(Ftype total_freqs);
 
@@ -59,6 +58,9 @@ public:
 	}
 	int NumPositiveItems() const {
 		return nu_pos_total_;
+	}
+	double NumPosRatio() const {
+		return (double) nu_pos_total_ / (double) nu_transactions_;
 	}
 	void ShowInfo();
 

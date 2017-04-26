@@ -29,7 +29,7 @@ ContDatabase::ContDatabase(std::istream& features,
 		std::istream& classes) {
 	readFromCSV(features);
 	readClassFromCSV(classes);
-	ShowInfo();
+//	ShowInfo();
 }
 
 // read a database file
@@ -63,21 +63,15 @@ bool reverse) {
 	nu_transactions_ = transposed.size();
 	nu_items_ = transposed[0].size();
 
-	std::vector<std::vector<Ftype>> tmp;
-	tmp.resize(nu_items_);
-	for (int i = 0; i < nu_items_; ++i) {
-		tmp[i].resize(nu_transactions_);
-	}
+	vector<vector<Ftype>> tmp(nu_items_,
+			vector<Ftype>(nu_transactions_, 0.0));
 	for (int i = 0; i < nu_items_; ++i) {
 		for (int j = 0; j < nu_transactions_; ++j) {
 			tmp[i][j] = transposed[j][i];
 		}
 	}
-
+//	features = tmp;
 	// Convert into Ranking.
-	vector<vector<Ftype>> rank = std::vector<std::vector<Ftype> >(
-			nu_items_, std::vector<Ftype>(nu_transactions_, 0));
-
 	features = vector<vector<Ftype>>(nu_items_,
 			vector<Ftype>(nu_transactions_, 0.0));
 	vector<size_t> idx(nu_transactions_);
@@ -89,8 +83,9 @@ bool reverse) {
 		sort(idx.begin(), idx.end(),
 				[&freqs](int i1, int i2) {return freqs[i1] < freqs[i2];});
 		for (int j = 0; j < nu_transactions_; j++) {
-			rank[i][j] = idx[j] + 1;
-			features[i][j] = (double) rank[i][j] / (double) nu_transactions_;
+//			rank[i][j] = idx[j] + 1;
+			features[i][j] = (double) (idx[j] + 1)
+					/ (double) nu_transactions_;
 		}
 	}
 }

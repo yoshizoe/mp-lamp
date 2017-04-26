@@ -75,7 +75,7 @@ protected:
 	void Check(MPI_Data& mpi_data); // DOMAINDEPENDENT
 	bool ExpandNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data);
 	std::vector<int> GetChildren(std::vector<int> items); // DOMAINDEPENDENT
-	void PopNodeFromStack();
+	bool PopNodeFromStack();
 	bool TestAndPushNode(int new_item);
 	void ProcessNode(double freq, int* ppc_ext_buf);
 	void CheckProbe(int& accum_period_counter_, long long int lap_time);
@@ -98,9 +98,10 @@ protected:
 	void CalculateThreshold();
 	void SendNewSigLevel(double sig_level);
 	void RecvNewSigLevel(int src);
-	std::vector<double> freqs_stack_;
+	std::vector<double> freq_stack_;
 	double alpha_;
-	double thre_freq_;
+	double thre_freq_; // Threshold for itemset-set C.
+	double thre_pmin_; // Threshold for itemset-set T (testable pattern)
 	// TODO: These functions should be factored in Get
 	/**
 	 * Methods For GetSignificant

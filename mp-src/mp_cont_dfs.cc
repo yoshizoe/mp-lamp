@@ -659,6 +659,7 @@ void MP_CONT_LAMP::SortSignificantSets() {
 						significant_stack_));
 		set = significant_stack_->NextItemset(set);
 	}
+	printf("%d significant sets\n", significant_set_.size());
 }
 
 // TODO: Ideally, this should also be hidden in other class.
