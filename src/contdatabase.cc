@@ -29,7 +29,7 @@ ContDatabase::ContDatabase(std::istream& features,
 		std::istream& classes) {
 	readFromCSV(features);
 	readClassFromCSV(classes);
-	ShowInfo();
+//	ShowInfo();
 }
 
 // read a database file
@@ -192,10 +192,27 @@ double ContDatabase::CalculatePMin(Ftype total_freqs) {
 	double kl = kl_max_fast(total_freqs,
 			nu_transactions_ - nu_pos_total_, nu_transactions_);
 	double pmin = computePvalue(kl, nu_transactions_);
-	printf("frequency = %.2f, kl = %.2f, pvalue = %.2f\n",
-			total_freqs, kl, pmin);
+//	printf("frequency = %.2f, kl = %.2f, pvalue = %.2f\n",
+//			total_freqs, kl, pmin);
+	assert(0.0 <= kl);
 	assert(0.0 <= pmin && pmin <= 1.00);
 	return pmin;
+}
+
+double ContDatabase::CalculatePValue(
+		std::vector<int>& itemset_items) {
+	std::vector<Ftype> freqs = GetFreqArray(itemset_items);
+	Ftype tot_freqs = 0;
+	Ftype pos_freqs = 0;
+
+	for (int j = 0; j < nu_transactions_; ++j) {
+		tot_freqs += freqs[j];
+		if (classes[j] == 1) { // TODO: which is positive? refactor.
+			pos_freqs += freqs[j];
+		}
+
+	}
+	return CalculatePValue(tot_freqs, pos_freqs);
 }
 
 /**
@@ -214,7 +231,7 @@ double ContDatabase::computePvalue(double kl, int N) {
 	if (kl <= pow(10, -8))
 		pval = 1.0;
 	else
-		pval = 1 - boost::math::cdf(chisq_dist, 2 * (double) N * kl);
+		pval = 1.0 - boost::math::cdf(chisq_dist, 2 * (double) N * kl);
 	return pval;
 }
 
@@ -244,6 +261,7 @@ double ContDatabase::kl(double total_freq, double pos_freq) {
 	double r1 = (double) nu_pos_total_ / (double) nu_transactions_;
 	double r0 = (double) (nu_transactions_ - nu_pos_total_)
 			/ (double) nu_transactions_;
+	assert(pos_freq <= total_freq);
 	assert(0.0 <= r0 && r0 <= 1.0);
 	assert(0.0 <= r1 && r1 <= 1.0);
 	double neg_freq = total_freq - pos_freq;

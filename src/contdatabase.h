@@ -48,6 +48,7 @@ public:
 			int new_item, int* child);
 	double CalculatePValue(Ftype total_freq,
 			Ftype pos_freq);
+	double CalculatePValue(std::vector<int>& itemset_items);
 	double CalculatePMin(Ftype total_freqs);
 
 	int NumItems() const {

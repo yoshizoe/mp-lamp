@@ -416,8 +416,8 @@ void MP_CONT_LAMP::Search() {
 	ContinuousPatternMiningData* cpm_data_ =
 			new ContinuousPatternMiningData(d_);\
 	ParallelContinuousPM* psearch = new ParallelContinuousPM(
-			cpm_data_, mpi_data_, treesearch_data_, FLAGS_a, &log_, timer_,
-			lfs_);
+			cpm_data_, mpi_data_, treesearch_data_, FLAGS_a, &log_,
+			timer_, lfs_);
 	GetTestableData* gettestable_data_;
 	GetContSignificantData* getsignificant_data_;
 
@@ -572,8 +572,8 @@ void MP_CONT_LAMP::Search() {
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
 	// TODO: ?
-	printf("freq_stack_->PrintAll()\n");
-	freq_stack_->PrintAll(std::cout);
+//	printf("freq_stack_->PrintAll()\n");
+//	freq_stack_->PrintAll(std::cout);
 
 	{
 		// TODO: FLAGS_a should be final_sig_level. For testing purpose we put alpha.
@@ -639,28 +639,19 @@ double MP_CONT_LAMP::GetInterimSigLevel(int lambda) const {
 //	return lv;
 }
 
+// TODO: Put inside of ParallelContinuousPM
 void MP_CONT_LAMP::SortSignificantSets() {
+	printf("SortSignificantSets: %d items\n",
+			significant_stack_->NuItemset());
+
 	int * set = significant_stack_->FirstItemset();
-	printf("SortSignificantSets is not implemented\n");
 	while (set != NULL) {
 		// calculate support from set
-		std::vector<double> sup_buf_(d_->NumTransactions(), 1.0);
-		{
-			int n = significant_stack_->GetItemNum(set);
-			// TODO: quite inefficient. Should return by reference?
-			for (int i = 0; i < n; i++) {
-				int item = significant_stack_->GetNthItem(set, i);
-				sup_buf_ = d_->GetChildrenFreq(sup_buf_, item);
+		std::vector<int> itemset = significant_stack_->getItems(set);
+		std::vector<double> freqs = d_->GetFreqArray(itemset);
 
-			}
-		}
-		printf("");
-		for (int i = 0; i < sup_buf_.size(); ++i) {
-			printf("");
-		}
-		double freq = d_->GetFreq(sup_buf_);
-		double pos_freq = d_->GetPositiveFreq(sup_buf_);
-
+		double freq = d_->GetFreq(freqs);
+		double pos_freq = d_->GetPositiveFreq(freqs);
 		double pval = d_->CalculatePValue(freq, pos_freq);
 
 		significant_set_.insert(
@@ -734,7 +725,8 @@ std::ostream & MP_CONT_LAMP::PrintSignificantSet(
 				<< std::setw(16) << std::left
 				<< (*it).pval_ * final_closed_set_num_ << std::right
 				<< "" << std::setw(12) << (*it).sup_num_ << ""
-				<< std::setw(12) << (*it).pos_sup_num_ << "" << std::endl;
+				<< std::setw(12) << (*it).pos_sup_num_ << ""
+				<< std::endl;
 //		 s << "pval (raw)="   << std::setw(16) << std::left << (*it).pval_ << std::right
 //		   << "pval (corr)="  << std::setw(16) << std::left << (*it).pval_ * final_closed_set_num_ << std::right
 //		   << "\tfreq=" << std::setw(8)  << (*it).sup_num_
