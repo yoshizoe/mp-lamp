@@ -890,7 +890,7 @@ void ParallelContinuousPM::ExtractSignificantSet() {
 	printf("ExtractSignificantSet\n");
 
 	// XXX: Pmin should be calculated by master node and then broadcast to the others.
-	{
+
 		int numItemsets = freq_stack_.size();
 
 		std::vector<std::pair<double, double>> freq_pmin;
@@ -928,26 +928,27 @@ void ParallelContinuousPM::ExtractSignificantSet() {
 			freq_pmin.erase(freq_pmin.begin());
 			// TODO: should also remove from freq_stack_.
 		}
-	}
+
 
 //	double thre_bonferroni = d_->CalculatePMin(pmin_thre_);
 	std::multimap<double, int *>::iterator it;
 	printf("bonferroni corrected threshold = %.8f\n", thre_pmin_);
+	printf("#Testable Pattern = %d\n", freq_pmin.size());
 	for (it = getsignificant_data->freq_map_->begin();
 			it != getsignificant_data->freq_map_->end(); ++it) {
 		// TODO: Here we should implement calculating p-value.
 		std::vector<int> itemset =
-				treesearch_data->node_stack_->getItems((*it).second);
+				getsignificant_data->freq_stack_->getItems((*it).second);
 		double actual_pvalue = d_->CalculatePValue(itemset);
 
 		// TODO: equal??
 		if (actual_pvalue <= thre_pmin_) {
-//			printf("Significant Itemset = ");
-//			for (int i = 0; i < itemset.size(); ++i) {
-//				printf("%d ", itemset[i]);
-//			}
-//			printf("\n Pvalue = %.2f, Pmin = %.2f \n", actual_pvalue,
-//					(*it).first);
+			printf("Significant Itemset = ");
+			for (int i = 0; i < itemset.size(); ++i) {
+				printf("%d ", itemset[i]);
+			}
+			printf("\n Pvalue = %.2f, Pmin = %.2f \n", actual_pvalue,
+					(*it).first);
 			getsignificant_data->significant_stack_->PushPre();
 			int * item =
 					getsignificant_data->significant_stack_->Top();

@@ -166,8 +166,8 @@ private:
 //--------
 // for printing results
 
-	long long int final_closed_set_num_;
-	int final_support_;
+	long long int num_final_testable_patterns;
+//	int final_support_;
 	double final_sig_level_;
 
 	int CallBcast(void * buffer, int data_count, MPI_Datatype type);

@@ -104,7 +104,7 @@ MP_CONT_LAMP::MP_CONT_LAMP(ContDatabase* d, int rank, int nu_proc,
 				mpi_data_.hypercubeDimension_), phase_(0), freq_stack_(
 		NULL), significant_stack_(
 		NULL), total_expand_num_(0ll), expand_num_(0ll), closed_set_num_(
-				0ll), final_closed_set_num_(0ll), final_support_(0), final_sig_level_(
+				0ll), num_final_testable_patterns(0ll), final_sig_level_(
 				0.0), last_bcast_was_dtd_(false) {
 	printf("initializing MP_LAMP\n");
 	if (FLAGS_d > 0) {
@@ -435,7 +435,7 @@ void MP_CONT_LAMP::Search() {
 	CheckPoint();
 
 //	CallBcast(&lambda_, 1, MPI_INT); // Rank-0 process broadcasts its lambda to all the other processes
-	final_support_ = lambda_;
+//	final_support_ = lambda_;
 
 	if (!FLAGS_second_phase) {
 		log_.d_.search_finish_time_ = timer_->Elapsed();
@@ -505,6 +505,7 @@ void MP_CONT_LAMP::Search() {
 		assert(
 				freq_map_.size()
 						== gettestable_data_->freq_map_->size());
+		closed_set_num_ = freq_map_.size();
 	}
 
 	DBG(D(1) << "closed_set_num=" << closed_set_num_ << std::endl
@@ -521,7 +522,7 @@ void MP_CONT_LAMP::Search() {
 						<< closed_set_num_reduced << std::endl
 				;);
 	if (mpi_data_.mpiRank_ == 0)
-		final_closed_set_num_ = closed_set_num_reduced;
+		num_final_testable_patterns = closed_set_num_reduced;
 
 	log_.d_.dtd_phase_per_sec_ =
 			(double) (log_.d_.dtd_phase_num_)
@@ -535,8 +536,8 @@ void MP_CONT_LAMP::Search() {
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
 			std::cout << "# " << "2nd phase end\n";
 			std::cout << "# " << "closed_set_num=" << std::setw(12)
-					<< final_closed_set_num_ << "\tsig_lev="
-					<< (FLAGS_a / final_closed_set_num_)
+					<< num_final_testable_patterns << "\tsig_lev="
+					<< (FLAGS_a / num_final_testable_patterns)
 					<< "\tnum_expand=" << std::setw(12) << expand_num_
 					<< "\telapsed_time="
 					<< (timer_->Elapsed() - log_.d_.search_start_time_)
@@ -568,7 +569,7 @@ void MP_CONT_LAMP::Search() {
 			FLAGS_sig_max);
 	// significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
 
-	final_sig_level_ = FLAGS_a / final_closed_set_num_;
+	final_sig_level_ = FLAGS_a / num_final_testable_patterns;
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
 	// TODO: ?
@@ -695,9 +696,8 @@ std::ostream & MP_CONT_LAMP::PrintDBInfo(std::ostream & out) const {
 std::ostream & MP_CONT_LAMP::PrintResults(std::ostream & out) const {
 	std::stringstream s;
 
-	s << "# min. sup=" << final_support_;
 	if (FLAGS_second_phase)
-		s << "\tcorrection factor=" << final_closed_set_num_;
+		s << "\tcorrection factor=" << num_final_testable_patterns;
 	s << std::endl;
 
 	if (FLAGS_third_phase)
@@ -710,7 +710,7 @@ std::ostream & MP_CONT_LAMP::PrintResults(std::ostream & out) const {
 std::ostream & MP_CONT_LAMP::PrintSignificantSet(
 		std::ostream & out) const {
 	std::stringstream s;
-	printf("PrintSignificantSet not implemented\n");
+//	printf("PrintSignificantSet not implemented\n");
 
 	s << "# number of significant patterns="
 			<< significant_set_.size() << std::endl;
@@ -724,10 +724,10 @@ std::ostream & MP_CONT_LAMP::PrintSignificantSet(
 				<< std::right << ""
 
 				<< std::setw(16) << std::left
-				<< (*it).pval_ * final_closed_set_num_ << std::right
+				<< (*it).pval_ * num_final_testable_patterns << std::right
 				<< "" << std::setw(12) << (*it).sup_num_ << ""
-				<< std::setw(12) << (*it).pos_sup_num_ << ""
-				<< std::endl;
+				<< std::setw(12) << (*it).pos_sup_num_ << " ";
+//				<< std::endl;
 //		 s << "pval (raw)="   << std::setw(16) << std::left << (*it).pval_ << std::right
 //		   << "pval (corr)="  << std::setw(16) << std::left << (*it).pval_ * final_closed_set_num_ << std::right
 //		   << "\tfreq=" << std::setw(8)  << (*it).sup_num_
@@ -735,7 +735,7 @@ std::ostream & MP_CONT_LAMP::PrintSignificantSet(
 //		   << "\titems";
 
 		const int * item = (*it).set_;
-//		significant_stack_->Print(s, d_->ItemNames(), item);
+		significant_stack_->Print(s, item);
 	}
 
 	out << s.str() << std::flush;
