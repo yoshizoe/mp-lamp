@@ -390,11 +390,7 @@ void ParallelDFS::SendDTDReply(MPI_Data& mpi_data,
 			|| mpi_data.dtd_->reduce_time_warp_;
 	message[1] = (tw_flag ? 1 : 0);
 // for Steal
-	mpi_data.dtd_->not_empty_ =
-			!(treesearch_data->node_stack_->Empty())
-					|| (mpi_data.thieves_->Size() > 0)
-					|| treesearch_data->stealer_->StealStarted()
-					|| mpi_data.processing_node_; // thieves_ and stealer state check
+	mpi_data.dtd_->not_empty_ = HasJobToDo();
 // for Steal2
 // dtd_.not_empty_ =
 //     !(node_stack_->Empty()) || (thieves_->Size() > 0) ||
@@ -421,6 +417,14 @@ void ParallelDFS::SendDTDReply(MPI_Data& mpi_data,
 	mpi_data.echo_waiting_ = false;
 	mpi_data.dtd_->ClearAccumFlags();
 	mpi_data.dtd_->ClearReduceVars();
+}
+
+bool ParallelDFS::HasJobToDo() {
+	return !(treesearch_data->node_stack_->Empty())
+			|| (mpi_data.thieves_->Size() > 0)
+			|| treesearch_data->stealer_->StealStarted()
+			|| mpi_data.processing_node_; // thieves_ and stealer state check
+
 }
 
 void ParallelDFS::RecvDTDReply(MPI_Data& mpi_data,

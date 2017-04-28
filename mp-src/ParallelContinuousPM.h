@@ -86,6 +86,8 @@ protected:
 
 	int phase_; // 1, 2, 3
 
+	bool HasJobToDo();
+
 	/**
 	 * Methods for Maintaining threshold value
 	 */
@@ -102,6 +104,10 @@ protected:
 	double alpha_;
 	double thre_freq_; // Threshold for itemset-set C.
 	double thre_pmin_; // Threshold for itemset-set T (testable pattern)
+
+	std::vector<std::pair<double, double>> freq_pmin; // only for rank-0.
+	bool freq_received;
+//	int prev_freq_pmin_size_; // only for rank-0.
 	// TODO: These functions should be factored in Get
 	/**
 	 * Methods For GetSignificant

@@ -57,6 +57,7 @@ protected:
 	void SendDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
 	void RecvDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 			int src);
+	virtual bool HasJobToDo();
 
 	void SendBcastFinish(MPI_Data& mpi_data);
 	void RecvBcastFinish(MPI_Data& mpi_data, int src);

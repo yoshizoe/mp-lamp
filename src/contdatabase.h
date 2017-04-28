@@ -33,22 +33,22 @@ public:
 
 	// TODO: implement
 //	std::vector<int> GetChildren(int itemset_id); // TODO: Should this be in database?
-	std::vector<int> GetChildren(std::vector<int> items); // TODO: Should this be in database?
+	std::vector<int> GetChildren(std::vector<int> items) const; // TODO: Should this be in database?
 	// TODO: implement
-	std::vector<Ftype> GetFreqArray(std::vector<int> itemset_item);
+	std::vector<Ftype> GetFreqArray(std::vector<int> itemset_item) const;
 	// TODO: implement
-	Ftype GetFreq(std::vector<int> itemset_items);
+	Ftype GetFreq(std::vector<int> itemset_items) const;
 	// TODO: implement
-	Ftype GetFreq(std::vector<Ftype> itemset_freqs);
-	Ftype GetPositiveFreq(std::vector<Ftype> itemset_freqs);
+	Ftype GetFreq(std::vector<Ftype> itemset_freqs) const;
+	Ftype GetPositiveFreq(std::vector<Ftype> itemset_freqs) const;
 	// TODO: implement
 	std::vector<Ftype> GetChildrenFreq(
-			std::vector<Ftype>& parent_freq, int new_item);
+			std::vector<Ftype>& parent_freq, int new_item) const;
 	bool PPCExtension(VariableLengthItemsetStack * st, int* parent,
-			int new_item, int* child);
-	double CalculatePValue(Ftype total_freq, Ftype pos_freq);
-	double CalculatePValue(std::vector<int>& itemset_items);
-	double CalculatePMin(Ftype total_freqs);
+			int new_item, int* child)const;
+	double CalculatePValue(Ftype total_freq, Ftype pos_freq) const;
+	double CalculatePValue(std::vector<int>& itemset_items) const;
+	double CalculatePMin(Ftype total_freqs) const;
 
 	int NumItems() const {
 		return nu_items_;
@@ -62,13 +62,17 @@ public:
 	double NumPosRatio() const {
 		return (double) nu_pos_total_ / (double) nu_transactions_;
 	}
-	void ShowInfo();
+	double PMinWithNumPosRatio() const {
+		double pos_r = (double) nu_pos_total_ / (double) nu_transactions_;
+		return CalculatePMin(pos_r);
+	}
+	void ShowInfo()const ;
 
 protected:
 
-	double computePvalue(double kl, int N);
-	double kl_max_fast(double freq, int N0, int N);
-	double kl(double total_freq, double pos_freq);
+	double computePvalue(double kl, int N) const;
+	double kl_max_fast(double freq, int N0, int N) const;
+	double kl(double total_freq, double pos_freq) const;
 
 	// TODO: This should be transposed for better memory access.
 	std::vector<std::vector<Ftype> > features; // TODO: align values for each feature continuously.

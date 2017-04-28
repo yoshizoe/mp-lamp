@@ -569,7 +569,8 @@ void MP_CONT_LAMP::Search() {
 			FLAGS_sig_max);
 	// significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
 
-	final_sig_level_ = FLAGS_a / num_final_testable_patterns;
+//	final_sig_level_ = FLAGS_a / num_final_testable_patterns;
+	final_sig_level_ = gettestable_data_->sig_level_;
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
 	// TODO: ?
@@ -579,7 +580,7 @@ void MP_CONT_LAMP::Search() {
 	{
 		// TODO: FLAGS_a should be final_sig_level. For testing purpose we put alpha.
 		getsignificant_data_ = new GetContSignificantData(freq_stack_,
-				&freq_map_, FLAGS_a, significant_stack_,
+				&freq_map_, final_sig_level_, significant_stack_,
 				&significant_set_);
 //		getsignificant_data_ = new GetSignificantData(freq_stack_,
 //				&freq_map_, final_sig_level_, significant_stack_,

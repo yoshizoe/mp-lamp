@@ -46,7 +46,7 @@ ParallelContinuousPM::ParallelContinuousPM(
 				bpm_data->d_), alpha_(alpha), expand_num_(0), closed_set_num_(
 				0), phase_(0), gettestable_data(NULL), getsignificant_data(
 		NULL), sup_buf_(d_->NumTransactions(), 1.0), thre_freq_(0.0), thre_pmin_(
-				alpha_) {
+				alpha_), freq_received(true) {
 //	g_ = new LampGraph<uint64>(*d_); // No overhead to generate LampGraph.
 }
 
@@ -103,8 +103,16 @@ void ParallelContinuousPM::ProcAfterProbe() {
 				// TODO: This sends too many DTDs?
 				// Delay this for testing purpose...?
 				if (treesearch_data->node_stack_->Empty()) {
-					SendDTDRequest(mpi_data);
-					// log_->d_.dtd_request_num_++;
+					if (freq_received) {
+						printf("SendMinPValueRequest because "
+								"stack is empty and freq received\n");
+						SendMinPValueRequest(mpi_data);
+					} else {
+						printf(
+								"SendDTDRequest because "
+										"stack is empty and freq not received\n");
+						SendDTDRequest(mpi_data);
+					}
 				}
 			} else {
 				// unknown phase
@@ -523,6 +531,13 @@ bool ParallelContinuousPM::CheckProcessNodeEnd(int n, bool n_is_ms,
 	return false;
 }
 
+bool ParallelContinuousPM::HasJobToDo() {
+	return !(treesearch_data->node_stack_->Empty())
+			|| (mpi_data.thieves_->Size() > 0)
+			|| treesearch_data->stealer_->StealStarted()
+			|| mpi_data.processing_node_ || !freq_stack_.empty();
+}
+
 bool ParallelContinuousPM::AccumCountReady(MPI_Data& mpi_data) const {
 	for (int i = 0; i < k_echo_tree_branch; i++) {
 		if (mpi_data.bcast_targets_[i] >= 0
@@ -665,18 +680,24 @@ void ParallelContinuousPM::CalculateThreshold() {
 // TODO: Binary search may be more efficient.
 // Sort is already inefficient.
 	int numItemsets = freq_stack_.size();
+	if (numItemsets == 0) {
+		printf("NO NEW FREQ ACQUIRED! READY FOR TERMINATION\n");
+		// TODO: Put terminate detection.
+		freq_received = false;
+		return;
+	}
 
-	std::vector<std::pair<double, double>> freq_pmin;
 //	std::vector<double> pmins;
 	for (int i = 0; i < freq_stack_.size(); ++i) {
 		double pmin = d_->CalculatePMin(freq_stack_[i]);
 		if (pmin < thre_pmin_) {
 			freq_pmin.push_back(
 					std::pair<double, double>(freq_stack_[i], pmin));
-		} else {
-			freq_stack_.erase(freq_stack_.begin() + i);
+			// TODO: we can check threshold everytime inserting an item.
 		}
 	}
+	freq_stack_.clear();
+
 	printf("%d itemsets out of %d itemsets is pmin(X) < thre_pmin\n",
 			freq_pmin.size(), numItemsets);
 	auto cmp =
@@ -691,13 +712,18 @@ void ParallelContinuousPM::CalculateThreshold() {
 //		printf(
 //				"thre_freq_ %.4f is too low!: %d (|T|) * %.4f (pmin(X)) >= %.2f\n",
 //				thre_freq_, freq_pmin.size(), thre_pmin_, alpha_);
+
+		// TODO: Can we remove multiple items at the same time?
 		double min_freq = freq_pmin.begin()->first;
-		thre_freq_ = std::min(d_->NumPosRatio(), min_freq);
-		thre_pmin_ = d_->CalculatePMin(thre_freq_);
-//		printf("thre_freq updated to %.4f, thre_pmin_ = %.4f\n",
-//				thre_freq_, thre_pmin_);
+
+		if (d_->NumPosRatio() < min_freq) {
+			thre_freq_ = d_->NumPosRatio();
+			thre_pmin_ = d_->PMinWithNumPosRatio();
+		} else {
+			thre_freq_ = min_freq;
+			thre_pmin_ = freq_pmin.begin()->second;
+		}
 		freq_pmin.erase(freq_pmin.begin());
-		// TODO: should also remove from freq_stack_.
 	}
 
 	assert(prev_thre_freq <= thre_freq_);
@@ -706,6 +732,8 @@ void ParallelContinuousPM::CalculateThreshold() {
 	}
 	printf("thre_pmin_ = %.8f for thre_freq = %.5f\n", thre_pmin_,
 			thre_freq_);
+	freq_received = true;
+	gettestable_data->sig_level_ = alpha_ / freq_pmin.size();
 }
 
 /**
@@ -890,65 +918,69 @@ void ParallelContinuousPM::ExtractSignificantSet() {
 	printf("ExtractSignificantSet\n");
 
 	// XXX: Pmin should be calculated by master node and then broadcast to the others.
-
-		int numItemsets = freq_stack_.size();
-
-		std::vector<std::pair<double, double>> freq_pmin;
-//	std::vector<double> pmins;
-		for (int i = 0; i < freq_stack_.size(); ++i) {
-			double pmin = d_->CalculatePMin(freq_stack_[i]);
-			if (pmin < thre_pmin_) {
-				freq_pmin.push_back(
-						std::pair<double, double>(freq_stack_[i],
-								pmin));
-			} else {
-				freq_stack_.erase(freq_stack_.begin() + i);
-			}
-		}
-		printf(
-				"%d itemsets out of %d itemsets is pmin(X) < thre_pmin\n",
-				freq_pmin.size(), numItemsets);
-		auto cmp =
-				[](std::pair<double,double> const & a, std::pair<double,double> const & b)
-				{
-					return a.first < b.first;
-				};
-		std::sort(freq_pmin.begin(), freq_pmin.end(), cmp);
-//	std::sort(pmins.begin(), pmins.end());
-		double prev_thre_freq = thre_freq_;
-		while (freq_pmin.size() * thre_pmin_ >= alpha_) {
-//		printf(
-//				"thre_freq_ %.4f is too low!: %d (|T|) * %.4f (pmin(X)) >= %.2f\n",
-//				thre_freq_, freq_pmin.size(), thre_pmin_, alpha_);
-			double min_freq = freq_pmin.begin()->first;
-			thre_freq_ = std::min(d_->NumPosRatio(), min_freq);
-			thre_pmin_ = d_->CalculatePMin(thre_freq_);
-//		printf("thre_freq updated to %.4f, thre_pmin_ = %.4f\n",
-//				thre_freq_, thre_pmin_);
-			freq_pmin.erase(freq_pmin.begin());
-			// TODO: should also remove from freq_stack_.
-		}
-
+//
+//	int numItemsets = freq_stack_.size();
+//
+//	std::vector<std::pair<double, double>> freq_pmin;
+////	std::vector<double> pmins;
+//	for (int i = 0; i < freq_stack_.size(); ++i) {
+//		double pmin = d_->CalculatePMin(freq_stack_[i]);
+//		if (pmin < thre_pmin_) {
+//			freq_pmin.push_back(
+//					std::pair<double, double>(freq_stack_[i], pmin));
+//		} else {
+//			freq_stack_.erase(freq_stack_.begin() + i);
+//		}
+//	}
+//	printf("%d itemsets out of %d itemsets is pmin(X) < thre_pmin\n",
+//			freq_pmin.size(), numItemsets);
+//	auto cmp =
+//			[](std::pair<double,double> const & a, std::pair<double,double> const & b)
+//			{
+//				return a.first < b.first;
+//			};
+//	std::sort(freq_pmin.begin(), freq_pmin.end(), cmp);
+////	std::sort(pmins.begin(), pmins.end());
+//	double prev_thre_freq = thre_freq_;
+//	while (freq_pmin.size() * thre_pmin_ >= alpha_) {
+////		printf(
+////				"thre_freq_ %.4f is too low!: %d (|T|) * %.4f (pmin(X)) >= %.2f\n",
+////				thre_freq_, freq_pmin.size(), thre_pmin_, alpha_);
+//		double min_freq = freq_pmin.begin()->first;
+//		thre_freq_ = std::min(d_->NumPosRatio(), min_freq);
+//		thre_pmin_ = d_->CalculatePMin(thre_freq_);
+////		printf("thre_freq updated to %.4f, thre_pmin_ = %.4f\n",
+////				thre_freq_, thre_pmin_);
+//		freq_pmin.erase(freq_pmin.begin());
+//		// TODO: should also remove from freq_stack_.
+//	}
 
 //	double thre_bonferroni = d_->CalculatePMin(pmin_thre_);
 	std::multimap<double, int *>::iterator it;
-	printf("bonferroni corrected threshold = %.8f\n", thre_pmin_);
-	printf("#Testable Pattern = %d\n", freq_pmin.size());
+	printf("bonferroni corrected threshold = %.8f (sig_level_)\n",
+			getsignificant_data->final_sig_level_);
+	printf("bonferroni corrected threshold = %.8f (thre_pmin_)\n",
+			thre_pmin_);
+	printf("#Testable Pattern = %d (freq_pmin.size())\n",
+			freq_pmin.size());
+	printf("#Testable Pattern = %.4f (alpha/final_thre)\n",
+			alpha_ / thre_pmin_);
 	for (it = getsignificant_data->freq_map_->begin();
 			it != getsignificant_data->freq_map_->end(); ++it) {
 		// TODO: Here we should implement calculating p-value.
 		std::vector<int> itemset =
-				getsignificant_data->freq_stack_->getItems((*it).second);
+				getsignificant_data->freq_stack_->getItems(
+						(*it).second);
 		double actual_pvalue = d_->CalculatePValue(itemset);
-
+		double minimal_pvalue = d_->CalculatePMin((*it).first);
 		// TODO: equal??
 		if (actual_pvalue <= thre_pmin_) {
 			printf("Significant Itemset = ");
 			for (int i = 0; i < itemset.size(); ++i) {
 				printf("%d ", itemset[i]);
 			}
-			printf("\n Pvalue = %.2f, Pmin = %.2f \n", actual_pvalue,
-					(*it).first);
+			printf(": Pvalue = %.8f, Pmin = %.8f, Freq = %.8f \n",
+					actual_pvalue, minimal_pvalue, (*it).first);
 			getsignificant_data->significant_stack_->PushPre();
 			int * item =
 					getsignificant_data->significant_stack_->Top();
@@ -956,8 +988,6 @@ void ParallelContinuousPM::ExtractSignificantSet() {
 			getsignificant_data->significant_stack_->CopyItem(
 					(*it).second, item);
 			getsignificant_data->significant_stack_->PushPostNoSort();
-		} else {
-			//
 		}
 	}
 }

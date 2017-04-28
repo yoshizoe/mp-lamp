@@ -115,7 +115,8 @@ void ContDatabase::readClassFromCSV(istream& ifs) {
 //	return items;
 //}
 
-std::vector<int> ContDatabase::GetChildren(std::vector<int> items) {
+std::vector<int> ContDatabase::GetChildren(
+		std::vector<int> items) const {
 	if (items.empty()) {
 		// Expanding root node.
 		// TODO: Generate only a responsible nodes for the root.
@@ -140,7 +141,7 @@ std::vector<int> ContDatabase::GetChildren(std::vector<int> items) {
 }
 
 std::vector<ContDatabase::Ftype> ContDatabase::GetFreqArray(
-		std::vector<int> itemset_items) {
+		std::vector<int> itemset_items) const {
 	std::vector<ContDatabase::Ftype> freqs(nu_transactions_, 1.0);
 	for (int i = 0; i < itemset_items.size(); i++) {
 		int item = itemset_items[i];
@@ -153,7 +154,7 @@ std::vector<ContDatabase::Ftype> ContDatabase::GetFreqArray(
 }
 
 ContDatabase::Ftype ContDatabase::GetFreq(
-		std::vector<Ftype> itemset_freqs) {
+		std::vector<Ftype> itemset_freqs) const {
 	Ftype freq = 0;
 	for (int j = 0; j < nu_transactions_; ++j) {
 		freq += itemset_freqs[j];
@@ -162,7 +163,7 @@ ContDatabase::Ftype ContDatabase::GetFreq(
 }
 
 ContDatabase::Ftype ContDatabase::GetPositiveFreq(
-		std::vector<Ftype> itemset_freqs) {
+		std::vector<Ftype> itemset_freqs) const {
 	Ftype freq = 0;
 	for (int j = 0; j < nu_transactions_; ++j) {
 		if (classes[j] == 1) { // TODO: which is positive? refactor.
@@ -173,12 +174,12 @@ ContDatabase::Ftype ContDatabase::GetPositiveFreq(
 }
 
 ContDatabase::Ftype ContDatabase::GetFreq(
-		std::vector<int> itemset_items) {
+		std::vector<int> itemset_items) const {
 	return GetFreq(GetFreqArray(itemset_items));
 }
 
 std::vector<ContDatabase::Ftype> ContDatabase::GetChildrenFreq(
-		std::vector<Ftype>& parent_freq, int new_item) {
+		std::vector<Ftype>& parent_freq, int new_item) const {
 	assert(parent_freq.size() == nu_transactions_);
 	std::vector<Ftype> child(nu_transactions_);
 	for (int j = 0; j < nu_transactions_; ++j) {
@@ -189,7 +190,7 @@ std::vector<ContDatabase::Ftype> ContDatabase::GetChildrenFreq(
 
 // TODO: This function is awfully complicated like a spagetti.
 bool ContDatabase::PPCExtension(VariableLengthItemsetStack * st,
-		int* parent, int new_item, int* child) {
+		int* parent, int new_item, int* child) const {
 	// TODO: Prune a node if it is not PPCExtension.
 	st->CopyItem(parent, child);
 	st->PushOneItem(new_item);
@@ -197,7 +198,7 @@ bool ContDatabase::PPCExtension(VariableLengthItemsetStack * st,
 }
 
 double ContDatabase::CalculatePValue(Ftype total_freqs,
-		Ftype pos_freq) {
+		Ftype pos_freq) const {
 	assert(0 <= pos_freq);
 	assert(pos_freq <= total_freqs);
 	assert(total_freqs <= 1.0);
@@ -205,7 +206,7 @@ double ContDatabase::CalculatePValue(Ftype total_freqs,
 	return computePvalue(k, nu_transactions_);
 }
 
-double ContDatabase::CalculatePMin(Ftype total_freqs) {
+double ContDatabase::CalculatePMin(Ftype total_freqs) const {
 	assert(0.0 <= total_freqs && total_freqs <= 1.0);
 	double kl = kl_max_fast(total_freqs,
 			nu_transactions_ - nu_pos_total_, nu_transactions_);
@@ -218,7 +219,7 @@ double ContDatabase::CalculatePMin(Ftype total_freqs) {
 }
 
 double ContDatabase::CalculatePValue(
-		std::vector<int>& itemset_items) {
+		std::vector<int>& itemset_items) const {
 	std::vector<Ftype> freqs = GetFreqArray(itemset_items);
 	Ftype tot_freqs = 0;
 	Ftype pos_freqs = 0;
@@ -239,7 +240,7 @@ double ContDatabase::CalculatePValue(
  */
 // Sugiyama's code
 // compute p-value
-double ContDatabase::computePvalue(double kl, int N) {
+double ContDatabase::computePvalue(double kl, int N) const {
 	assert(0 <= kl);
 	assert(0 < N);
 	boost::math::chi_squared chisq_dist(1);
@@ -257,7 +258,7 @@ double ContDatabase::computePvalue(double kl, int N) {
 
 // TODO: ???
 // Sugiyama's code
-double ContDatabase::kl_max_fast(double freq, int N0, int N) {
+double ContDatabase::kl_max_fast(double freq, int N0, int N) const {
 	double r0 = (double) N0 / (double) N;
 	if (freq < r0) {
 		double d = freq * log(1.0 / r0)
@@ -275,7 +276,7 @@ double ContDatabase::kl_max_fast(double freq, int N0, int N) {
 }
 
 // TODO: Why kl < 0?
-double ContDatabase::kl(double total_freq, double pos_freq) {
+double ContDatabase::kl(double total_freq, double pos_freq) const {
 	double r1 = (double) nu_pos_total_ / (double) nu_transactions_;
 	double r0 = (double) (nu_transactions_ - nu_pos_total_)
 			/ (double) nu_transactions_;
@@ -318,7 +319,7 @@ double ContDatabase::kl(double total_freq, double pos_freq) {
 	return kl;
 }
 
-void ContDatabase::ShowInfo() {
+void ContDatabase::ShowInfo() const {
 	printf("#Trans = %d, #Items = %d, #Pos Items = %d\n",
 			nu_transactions_, nu_items_, nu_pos_total_);
 
