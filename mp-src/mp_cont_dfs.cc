@@ -414,10 +414,11 @@ void MP_CONT_LAMP::Search() {
 //	BinaryPatternMiningData* bpm_data_ = new BinaryPatternMiningData(
 //			d_, bsh_, sup_buf_, child_sup_buf_);
 	ContinuousPatternMiningData* cpm_data_ =
-			new ContinuousPatternMiningData(d_);\
+			new ContinuousPatternMiningData(d_);
 	ParallelContinuousPM* psearch = new ParallelContinuousPM(
 			cpm_data_, mpi_data_, treesearch_data_, FLAGS_a, &log_,
 			timer_, lfs_);
+//	GetMinSupData* getminsup_data_;
 	GetTestableData* gettestable_data_;
 	GetContSignificantData* getsignificant_data_;
 
@@ -427,7 +428,67 @@ void MP_CONT_LAMP::Search() {
 	expand_num_ = 0ll;
 	closed_set_num_ = 0ll;
 
-	double lambda_ = 0.0;
+	double thre_freq_ = 0.0;
+	double thre_pmin_ = 1.0;
+
+	// --------
+	// prepare phase 1
+	// TODO: phase 1 should be started when PreProcessRootNode started.
+	phase_ = 1;
+	CheckPoint();
+	{
+		// TODO: This should be a part of PreProcessRootNode method.
+		// push root state to stack
+		int * root_itemset;
+		node_stack_->PushPre();
+		root_itemset = node_stack_->Top();
+//		node_stack_->SetSup(root_itemset, lambda_max_);
+		node_stack_->PushPostNoSort();
+	}
+
+	{
+		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+			std::cout << "# " << "1st phase start\n";
+
+		}
+		DBG(D(2) << "---------------" << std::endl
+		;);
+		DBG(D(1) << "1st phase start" << std::endl
+		;);
+		DBG(D(2) << "---------------" << std::endl
+		;);
+
+		psearch->GetMinimalSupport();
+//		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
+
+		thre_freq_ = psearch->GetThreFreq();
+		thre_pmin_ = psearch->GetThrePmin();
+
+		// todo: reduce expand_num_
+		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
+			std::cout << "# " << "1st phase end\n";
+			std::cout << "# " << "thre_freq_=" << thre_freq_;
+			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
+
+			<< "\telapsed_time="
+					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
+					<< std::endl;
+		}
+		DBG(D(2) << "---------------" << std::endl
+		;);
+		DBG(D(1) << "1st phase end" << std::endl
+		;);
+		DBG(D(2) << "---------------" << std::endl
+		;);
+		DBG(
+				D(2) << "thre_freq_=" << thre_freq_ << "thre_pmin_=" << thre_pmin_ <<
+				"\tnum_expand=" << std::setw(12)
+						<< expand_num_ << "\telapsed_time="
+						<< (timer_->Elapsed() - log_.d_.search_start_time_)
+								/ GIGA << std::endl
+				;);
+	}
+
 
 	// --------
 	// prepare phase 2
@@ -492,15 +553,15 @@ void MP_CONT_LAMP::Search() {
 //				;);
 
 //		CallBcast(&int_sig_lev, 1, MPI_DOUBLE);
-		double sig_level_ = FLAGS_a;
-		gettestable_data_ = new GetTestableData(lambda_, freq_stack_,
-				&freq_map_, sig_level_);
+//		double sig_level_ = thre_freq_;
+		gettestable_data_ = new GetTestableData(0, freq_stack_,
+				&freq_map_, thre_freq_);
 
 		psearch->GetTestablePatterns(gettestable_data_);
 //		GetTestablePatterns(mpi_data_, treesearch_data_, gettestable_data_);
 //		freq_stack_ = gettestable_data_->freq_stack_; // No need: two are the same.
 		//		freq_map_ = gettestable_data_->freq_map_; // No need?
-		sig_level_ = gettestable_data_->sig_level_;
+//		sig_level_ = gettestable_data_->sig_level_;
 		assert(freq_stack_ == gettestable_data_->freq_stack_);
 		assert(
 				freq_map_.size()
@@ -570,7 +631,7 @@ void MP_CONT_LAMP::Search() {
 	// significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
 
 //	final_sig_level_ = FLAGS_a / num_final_testable_patterns;
-	final_sig_level_ = gettestable_data_->sig_level_;
+	final_sig_level_ = psearch->GetThrePmin();
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
 	// TODO: ?
@@ -725,9 +786,9 @@ std::ostream & MP_CONT_LAMP::PrintSignificantSet(
 				<< std::right << ""
 
 				<< std::setw(16) << std::left
-				<< (*it).pval_ * num_final_testable_patterns << std::right
-				<< "" << std::setw(12) << (*it).sup_num_ << ""
-				<< std::setw(12) << (*it).pos_sup_num_ << " ";
+				<< (*it).pval_ * num_final_testable_patterns
+				<< std::right << "" << std::setw(12) << (*it).sup_num_
+				<< "" << std::setw(12) << (*it).pos_sup_num_ << " ";
 //				<< std::endl;
 //		 s << "pval (raw)="   << std::setw(16) << std::left << (*it).pval_ << std::right
 //		   << "pval (corr)="  << std::setw(16) << std::left << (*it).pval_ * final_closed_set_num_ << std::right

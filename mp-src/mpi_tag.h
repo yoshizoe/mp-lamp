@@ -19,6 +19,10 @@ struct Tag {
 		DTD_ACCUM_REQUEST, // request reporting accum count
 		DTD_ACCUM_REPLY, // reduce closed set count
 
+		CONT_REQUEST, // request for reporting discovered frequencies
+		CONT_REPLY, // reply
+		CONT_LAMBDA,
+
 		BCAST_FINISH,
 		CONTROL_TASK_END,
 

@@ -49,6 +49,7 @@ public:
 	double CalculatePValue(Ftype total_freq, Ftype pos_freq) const;
 	double CalculatePValue(std::vector<int>& itemset_items) const;
 	double CalculatePMin(Ftype total_freqs) const;
+	double CalculatePLowerBound(Ftype total_freqs) const;
 
 	int NumItems() const {
 		return nu_items_;
@@ -72,6 +73,7 @@ protected:
 
 	double computePvalue(double kl, int N) const;
 	double kl_max_fast(double freq, int N0, int N) const;
+	double kl_max_fast_bound(double freq, int N0, int N) const;
 	double kl(double total_freq, double pos_freq) const;
 
 	// TODO: This should be transposed for better memory access.

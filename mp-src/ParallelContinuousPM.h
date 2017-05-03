@@ -26,16 +26,24 @@ class ParallelContinuousPM: public ParallelDFS {
 	typedef int Class;
 public:
 	ParallelContinuousPM(ContinuousPatternMiningData* bpm_data,
-			MPI_Data& mpi_data, TreeSearchData* treesearch_data, double alpha, Log* log,
-			Timer* timer, std::ostream& ofs);
+			MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+			double alpha, Log* log, Timer* timer, std::ostream& ofs);
 	virtual ~ParallelContinuousPM();
 
 //	virtual void Search();
-//	void GetMinimalSupport(GetMinSupData* getminsup_data);
+	void GetMinimalSupport();
+	void GetDiscretizedMinimalSupport();
 //	void PreProcessRootNode(GetMinSupData* getminsup_data);
 	void GetTestablePatterns(GetTestableData* gettestable_data);
 	void GetSignificantPatterns(MPI_Data& mpi_data,
 			GetContSignificantData* getsignificant_data);
+
+	double GetThreFreq() {
+		return thre_freq_;
+	}
+	double GetThrePmin() {
+		return thre_pmin_;
+	}
 
 protected:
 	// TODO: How can we hide the dependency on those low level structures?
@@ -53,7 +61,7 @@ protected:
 	 */
 //	MPI_Data& mpi_data;
 //	TreeSearchData* treesearch_data;
-//	GetMinSupData* getminsup_data;
+	GetMinSupData* getminsup_data;
 	GetTestableData* gettestable_data;
 	GetContSignificantData* getsignificant_data;
 
@@ -73,12 +81,14 @@ protected:
 
 	void ProcAfterProbe(); // DOMAINDEPENDENT
 	void Check(MPI_Data& mpi_data); // DOMAINDEPENDENT
-	bool ExpandNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data);
+	bool ExpandNode(MPI_Data& mpi_data,
+			TreeSearchData*treesearch_data);
 	std::vector<int> GetChildren(std::vector<int> items); // DOMAINDEPENDENT
 	bool PopNodeFromStack();
 	bool TestAndPushNode(int new_item);
 	void ProcessNode(double freq, int* ppc_ext_buf);
-	void CheckProbe(int& accum_period_counter_, long long int lap_time);
+	void CheckProbe(int& accum_period_counter_,
+			long long int lap_time);
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 			long long int start_time);
 
@@ -96,16 +106,19 @@ protected:
 	void RecvMinPValueRequest(MPI_Data& mpi_data, int src);
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendMinPValueReply(MPI_Data& mpi_data);
-	void RecvMinPValueReply(MPI_Data& mpi_data, int src, MPI_Status* probe_status);
+	void RecvMinPValueReply(MPI_Data& mpi_data, int src,
+			MPI_Status* probe_status);
 	void CalculateThreshold();
 	void SendNewSigLevel(double sig_level);
 	void RecvNewSigLevel(int src);
-	std::vector<double> freq_stack_;
+	std::vector<double> frequencies;
+	std::vector<double> topKFrequencies;
+
 	double alpha_;
 	double thre_freq_; // Threshold for itemset-set C.
 	double thre_pmin_; // Threshold for itemset-set T (testable pattern)
 
-	std::vector<std::pair<double, double>> freq_pmin; // only for rank-0.
+//	std::vector<std::pair<double, double>> freq_pmin; // only for rank-0.
 	bool freq_received;
 //	int prev_freq_pmin_size_; // only for rank-0.
 	// TODO: These functions should be factored in Get
@@ -115,14 +128,30 @@ protected:
 	void SendResultRequest(MPI_Data& mpi_data);
 	void RecvResultRequest(MPI_Data& mpi_data, int src);
 	void SendResultReply(MPI_Data& mpi_data);
-	void RecvResultReply(MPI_Data& mpi_data, int src, MPI_Status status);
-	bool AccumCountReady(MPI_Data& mpi_data) const;
+	void RecvResultReply(MPI_Data& mpi_data, int src,
+			MPI_Status status);
+//	bool AccumCountReady(MPI_Data& mpi_data) const;
 	void ExtractSignificantSet();
 
 	void PrintItemset(int* itembuf, std::vector<Feature> freqs);
 
 // insert pointer into significant_map_ (do not sort the stack itself)
 //	void SortSignificantSets();
+
+	/**
+	 * Linear Space Continuous Pattern Mining
+	 *
+	 */
+	std::vector<std::pair<double, double>> InitializeThresholdTable(
+			 int size, double alpha);
+	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+	void SendDTDAccumRequest(MPI_Data& mpi_data);
+	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
+	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
+	void SendDTDAccumReply(MPI_Data& mpi_data);
+	void RecvDTDAccumReply(MPI_Data& mpi_data, int src);
+	std::vector<std::pair<double, double>> thresholds;
+	std::vector<int> count;
 
 	/**
 	 * Utils

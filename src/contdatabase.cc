@@ -218,6 +218,18 @@ double ContDatabase::CalculatePMin(Ftype total_freqs) const {
 	return pmin;
 }
 
+double ContDatabase::CalculatePLowerBound(Ftype total_freqs) const {
+	assert(0.0 <= total_freqs && total_freqs <= 1.0);
+	double kl = kl_max_fast_bound(total_freqs,
+			nu_transactions_ - nu_pos_total_, nu_transactions_);
+	double pmin = computePvalue(kl, nu_transactions_);
+//	printf("frequency = %.2f, kl = %.2f, pvalue = %.2f\n",
+//			total_freqs, kl, pmin);
+	assert(0.0 <= kl);
+	assert(0.0 <= pmin && pmin <= 1.00);
+	return pmin;
+}
+
 double ContDatabase::CalculatePValue(
 		std::vector<int>& itemset_items) const {
 	std::vector<Ftype> freqs = GetFreqArray(itemset_items);
@@ -274,6 +286,23 @@ double ContDatabase::kl_max_fast(double freq, int N0, int N) const {
 		return d;
 	}
 }
+
+double ContDatabase::kl_max_fast_bound(double freq, int N0, int N) const {
+	double r0 = (double) N0 / (double) N;
+	if (freq < r0) {
+		double d = freq * log(1.0 / r0)
+				+ (r0 - freq) * log((r0 - freq) / (r0 - r0 * freq))
+				+ (1.0 - r0) * log(1.0 / (1.0 - freq));
+		assert(0 <= d);
+		return d;
+	} else {
+		double d = r0 * log(1.0 / r0)
+				+ (1.0 - r0) * log(1.0 / (1.0 - r0));
+		assert(0 <= d);
+		return d;
+	}
+}
+
 
 // TODO: Why kl < 0?
 double ContDatabase::kl(double total_freq, double pos_freq) const {
