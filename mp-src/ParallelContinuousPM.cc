@@ -90,9 +90,9 @@ void ParallelContinuousPM::GetDiscretizedMinimalSupport() {
 			cs_thr_, dtd_accum_array_base_, accum_array_,
 			dtd_accum_recv_base_, accum_recv_);
 
-	printf("Ready GetDiscretizedMinimalSupport\n");
+//	printf("Ready GetDiscretizedMinimalSupport\n");
 	Search();
-	printf("Done GetDiscretizedMinimalSupport\n");
+//	printf("Done GetDiscretizedMinimalSupport\n");
 
 	// TODO: thre_pmin_ should be alpha / number of items with frequencies higher
 	thre_freq_ = thresholds[getminsup_data->lambda_ - 1].first;
