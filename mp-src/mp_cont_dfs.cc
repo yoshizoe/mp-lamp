@@ -95,12 +95,12 @@ const long long int MP_CONT_LAMP::k_cs_max = 1ll
 const int MP_CONT_LAMP::k_probe_period = 128;
 
 MP_CONT_LAMP::MP_CONT_LAMP(ContDatabase* d, int rank, int nu_proc,
-		int n, bool n_is_ms, int w, int l, int m) :
+		int n, bool n_is_ms, int w, int l, int m, int disretizeFreq) :
 		d_(d), dtd_(k_echo_tree_branch), mpi_data_(
 				FLAGS_bsend_buffer_size, rank, nu_proc, n, n_is_ms, w,
-				l, m, k_echo_tree_branch, &dtd_), timer_(
-				Timer::GetInstance()), give_stack_(NULL), stealer_(
-				mpi_data_.nRandStealTrials_,
+				l, m, k_echo_tree_branch, &dtd_), disretizeFreq(
+				disretizeFreq), timer_(Timer::GetInstance()), give_stack_(
+				NULL), stealer_(mpi_data_.nRandStealTrials_,
 				mpi_data_.hypercubeDimension_), phase_(0), freq_stack_(
 		NULL), significant_stack_(
 		NULL), total_expand_num_(0ll), expand_num_(0ll), closed_set_num_(
@@ -155,7 +155,7 @@ MP_CONT_LAMP::MP_CONT_LAMP(ContDatabase* d, int rank, int nu_proc,
 }
 
 void MP_CONT_LAMP::InitTreeRequest() {
-	// pushing tree to lifeline for the 1st wave
+// pushing tree to lifeline for the 1st wave
 	int num = 0;
 
 	for (std::size_t i = 1; i <= k_echo_tree_branch; i++) {
@@ -318,7 +318,7 @@ MP_CONT_LAMP::~MP_CONT_LAMP() {
 //}
 
 void MP_CONT_LAMP::Init() {
-	// todo: move accum cs count variable to inner class
+// todo: move accum cs count variable to inner class
 	mpi_data_.echo_waiting_ = false;
 	for (int i = 0; i < k_echo_tree_branch; i++)
 		mpi_data_.accum_flag_[i] = false;
@@ -338,7 +338,7 @@ void MP_CONT_LAMP::CheckPoint() {
 	;);
 	assert(mpi_data_.echo_waiting_ == false);
 
-	// does this hold?
+// does this hold?
 	for (int i = 0; i < k_echo_tree_branch; i++)
 		assert(mpi_data_.accum_flag_[i] == false);
 
@@ -408,7 +408,7 @@ void MP_CONT_LAMP::ClearTasks() {
 void MP_CONT_LAMP::Search() {
 	printf("MP_CONT_LAMP::Search\n");
 
-	// TODO: itemset_buf_ is not allocated.
+// TODO: itemset_buf_ is not allocated.
 	TreeSearchData* treesearch_data_ = new TreeSearchData(node_stack_,
 			give_stack_, &stealer_, itemset_buf_, &log_, timer_);
 //	BinaryPatternMiningData* bpm_data_ = new BinaryPatternMiningData(
@@ -431,9 +431,9 @@ void MP_CONT_LAMP::Search() {
 	double thre_freq_ = 0.0;
 	double thre_pmin_ = 1.0;
 
-	// --------
-	// prepare phase 1
-	// TODO: phase 1 should be started when PreProcessRootNode started.
+// --------
+// prepare phase 1
+// TODO: phase 1 should be started when PreProcessRootNode started.
 	phase_ = 1;
 	CheckPoint();
 	{
@@ -458,7 +458,13 @@ void MP_CONT_LAMP::Search() {
 		DBG(D(2) << "---------------" << std::endl
 		;);
 
-		psearch->GetMinimalSupport();
+		if (disretizeFreq == 0) {
+			psearch->GetMinimalSupport();
+		} else if (disretizeFreq == 1) {
+			psearch->GetDiscretizedMinimalSupport();
+		} else {
+			assert(false && "discretizeFreq=?");
+		}
 //		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
 
 		thre_freq_ = psearch->GetThreFreq();
@@ -468,11 +474,12 @@ void MP_CONT_LAMP::Search() {
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
 			std::cout << "# " << "1st phase end\n";
 			std::cout << "# " << "thre_freq_=" << thre_freq_;
-			std::cout << "\tnum_expand=" << std::setw(12) << expand_num_
+			std::cout << "\tnum_expand=" << std::setw(12)
+					<< expand_num_
 
-			<< "\telapsed_time="
-					<< (timer_->Elapsed() - log_.d_.search_start_time_) / GIGA
-					<< std::endl;
+					<< "\telapsed_time="
+					<< (timer_->Elapsed() - log_.d_.search_start_time_)
+							/ GIGA << std::endl;
 		}
 		DBG(D(2) << "---------------" << std::endl
 		;);
@@ -481,17 +488,18 @@ void MP_CONT_LAMP::Search() {
 		DBG(D(2) << "---------------" << std::endl
 		;);
 		DBG(
-				D(2) << "thre_freq_=" << thre_freq_ << "thre_pmin_=" << thre_pmin_ <<
-				"\tnum_expand=" << std::setw(12)
-						<< expand_num_ << "\telapsed_time="
-						<< (timer_->Elapsed() - log_.d_.search_start_time_)
-								/ GIGA << std::endl
+				D(2) << "thre_freq_=" << thre_freq_ << "thre_pmin_="
+						<< thre_pmin_ << "\tnum_expand="
+						<< std::setw(12) << expand_num_
+						<< "\telapsed_time="
+						<< (timer_->Elapsed()
+								- log_.d_.search_start_time_) / GIGA
+						<< std::endl
 				;);
 	}
 
-
-	// --------
-	// prepare phase 2
+// --------
+// prepare phase 2
 	phase_ = 2;
 	CheckPoint();
 
@@ -527,7 +535,7 @@ void MP_CONT_LAMP::Search() {
 //	if (mpi_data_.mpiRank_ == 0) {
 //		int_sig_lev = GetInterimSigLevel(lambda_);
 //	}
-	// todo: reduce expand_num_
+// todo: reduce expand_num_
 
 	{
 //		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
@@ -618,9 +626,9 @@ void MP_CONT_LAMP::Search() {
 		return;
 	}
 
-	// prepare 3rd phase
+// prepare 3rd phase
 	phase_ = 3;
-	//ClearTasks();
+//ClearTasks();
 	CheckPoint(); // needed for reseting dtd_.terminated_
 
 	if (node_stack_)
@@ -628,13 +636,13 @@ void MP_CONT_LAMP::Search() {
 	node_stack_ = NULL;
 	significant_stack_ = new VariableLengthItemsetStack(
 			FLAGS_sig_max);
-	// significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
+// significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
 
 //	final_sig_level_ = FLAGS_a / num_final_testable_patterns;
 	final_sig_level_ = psearch->GetThrePmin();
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
-	// TODO: ?
+// TODO: ?
 //	printf("freq_stack_->PrintAll()\n");
 //	freq_stack_->PrintAll(std::cout);
 
@@ -652,10 +660,10 @@ void MP_CONT_LAMP::Search() {
 		// TODO: put back to global variables.
 	}
 
-	// copy only significant itemset to buffer
-	// collect itemset
-	//   can reuse the other stack (needs to compute pval again)
-	//   or prepare simpler data structure
+// copy only significant itemset to buffer
+// collect itemset
+//   can reuse the other stack (needs to compute pval again)
+//   or prepare simpler data structure
 	if (mpi_data_.mpiRank_ == 0)
 		SortSignificantSets();
 	log_.d_.search_finish_time_ = timer_->Elapsed();

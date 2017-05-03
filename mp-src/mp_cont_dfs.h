@@ -64,7 +64,8 @@ public:
 	 * w: number of random victim tries
 	 * l: power of lifeline graph
 	 */
-	MP_CONT_LAMP(ContDatabase* d, int rank, int nu_proc, int n, bool n_is_ms, int w, int l, int m);
+	MP_CONT_LAMP(ContDatabase* d, int rank, int nu_proc, int n,
+			bool n_is_ms, int w, int l, int m, int disretizeFreq = 0);
 
 	~MP_CONT_LAMP();
 
@@ -110,6 +111,8 @@ private:
 	MPI_Data mpi_data_;
 
 	ContDatabase* d_;
+
+	int disretizeFreq;
 
 	Log log_;
 	Timer * timer_;

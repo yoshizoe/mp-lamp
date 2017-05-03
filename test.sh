@@ -21,9 +21,9 @@ fi
 
 ./run.sh 2>&1 | tee -a results.txt
 
-haspattern=`cat results.txt | grep "# number of significant patterns=0" | wc -l`
+haspattern=`cat results.txt | grep "# number of significant patterns" | wc -l`
 
-if [ $haspattern = "0" ]
+if [ $haspattern = "1" ]
 then
     echo "TEST PASSED"
     git-cola

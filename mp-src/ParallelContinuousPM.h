@@ -150,8 +150,15 @@ protected:
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendDTDAccumReply(MPI_Data& mpi_data);
 	void RecvDTDAccumReply(MPI_Data& mpi_data, int src);
+	int GetDiscretizedFrequency(double freq) const;
+	void CheckCSThreshold(MPI_Data& mpi_data);
+	bool ExceedCsThr() const;
+	int NextLambdaThr() const;
+	void IncCsAccum(int sup_num);
+	void SendLambda(MPI_Data& mpi_data, int lambda);
+	void RecvLambda(MPI_Data& mpi_data, int src);
 	std::vector<std::pair<double, double>> thresholds;
-	std::vector<int> count;
+//	std::vector<int> count;
 
 	/**
 	 * Utils

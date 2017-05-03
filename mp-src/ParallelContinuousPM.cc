@@ -66,15 +66,38 @@ void ParallelContinuousPM::GetMinimalSupport() {
 }
 
 void ParallelContinuousPM::GetDiscretizedMinimalSupport() {
-//	this->getminsup_data = getminsup_data;
+	printf("GetDiscretizedMinimalSupport\n");
 //	CheckInit();
 	phase_ = 4; // TODO: remove dependency on this
 
+	// TODO: Edit getminsup_data here.
+
 	// TODO: How do we select the discretization???
 	thresholds = InitializeThresholdTable(100, alpha_);
-	count.assign(thresholds.size(), 0);
+//	printf("thresholds.size() = %d\n", thresholds.size());
+	long long int* dtd_accum_array_base_ =
+			new long long int[thresholds.size() + 4];
+	long long int* dtd_accum_recv_base_ =
+			new long long int[thresholds.size() + 4];
+	long long int* accum_array_ = &(dtd_accum_array_base_[3]); // TODO: ???
+	long long int* accum_recv_ = &(dtd_accum_recv_base_[3]);
+	long long int* cs_thr_; // TODO: moc
+//	count.assign(thresholds.size(), 0);
+	int lambda_ = 1;
+	int lambda_max_ = thresholds.size();
+//	printf("getminsup_data\n");
+	this->getminsup_data = new GetMinSupData(lambda_max_, lambda_,
+			cs_thr_, dtd_accum_array_base_, accum_array_,
+			dtd_accum_recv_base_, accum_recv_);
 
+	printf("Ready GetDiscretizedMinimalSupport\n");
 	Search();
+	printf("Done GetDiscretizedMinimalSupport\n");
+
+	// TODO: thre_pmin_ should be alpha / number of items with frequencies higher
+	thre_freq_ = thresholds[getminsup_data->lambda_ - 1].first;
+	// TODO: Where should we put a threshold?
+	thre_pmin_ = thresholds[getminsup_data->lambda_ - 2].second;
 
 	// return lambda?
 }
@@ -172,7 +195,21 @@ void ParallelContinuousPM::ProbeExecute(MPI_Data& mpi_data,
 		assert(phase_ == 1);
 		RecvNewSigLevel(probe_src);
 		break;
-
+		/**
+		 * Linear Space CPM Minimal Support
+		 */
+	case Tag::DTD_ACCUM_REQUEST:
+		assert(phase_ == 4);
+		RecvDTDAccumRequest(mpi_data, probe_src);
+		break;
+	case Tag::DTD_ACCUM_REPLY:
+		assert(phase_ == 4);
+		RecvDTDAccumReply(mpi_data, probe_src);
+		break;
+	case Tag::LAMBDA:
+		assert(phase_ == 4);
+		RecvLambda(mpi_data, probe_src);
+		break;
 		/**
 		 * SIGNIFICANTSET
 		 */
@@ -206,12 +243,16 @@ void ParallelContinuousPM::ProbeExecute(MPI_Data& mpi_data,
  */
 void ParallelContinuousPM::Check(MPI_Data& mpi_data) {
 //	printf("Check\n");
-	if (mpi_data.mpiRank_ == 0 && phase_ == 1) {
-//		assert(false);
-		if (!mpi_data.echo_waiting_) {
-			SendMinPValueRequest(mpi_data);
+	if (mpi_data.mpiRank_ == 0) {
+		if (phase_ == 1) {
+			if (!mpi_data.echo_waiting_) {
+				SendMinPValueRequest(mpi_data);
+			}
+		} else if (phase_ == 4) {
+			if (!mpi_data.echo_waiting_) {
+				CheckCSThreshold(mpi_data);
+			}
 		} else {
-//			printf("MinPValue not sent due to echo_waiting_.\n");
 		}
 	}
 
@@ -475,6 +516,9 @@ void ParallelContinuousPM::ProcessNode(double freq,
 // TODO: For continuous pattern mining calculating p value should be put later?
 	if (phase_ == 1) {
 		frequencies.push_back(freq);
+	} else if (phase_ == 4) {
+		int disFreq = GetDiscretizedFrequency(freq);
+		IncCsAccum(disFreq);
 	} else {
 //		assert(freq);
 //		assert(pmin < pmin_thre_);
@@ -806,7 +850,8 @@ void ParallelContinuousPM::RecvNewSigLevel(int src) {
 	MPI_Status recv_status;
 	double msg = -1.0;
 
-	CallRecv(&msg, 1, MPI_DOUBLE, src, Tag::CONT_LAMBDA, &recv_status);
+	CallRecv(&msg, 1, MPI_DOUBLE, src, Tag::CONT_LAMBDA,
+			&recv_status);
 	assert(0.0 <= msg);
 // TODO: Each process may have its own threshold updated.
 	assert(msg > thre_freq_);
@@ -834,7 +879,6 @@ void ParallelContinuousPM::RecvNewSigLevel(int src) {
  * LINEAR SPACE CONTINUOUS PATTERN MINING
  *
  */
-// TODO: polymorphism to override SendDTDRequest
 void ParallelContinuousPM::SendDTDAccumRequest(MPI_Data& mpi_data) {
 	int message[1];
 	message[0] = 1; // dummy
@@ -966,11 +1010,14 @@ void ParallelContinuousPM::RecvDTDAccumReply(MPI_Data& mpi_data,
 	assert(flag);
 
 	if (mpi_data.mpiRank_ == 0) {
-//		if (ExceedCsThr()) {
-//			int new_lambda = NextLambdaThr();
-//			SendLambda(mpi_data, new_lambda);
-//			getminsup_data->lambda_ = new_lambda;
-//		}
+		if (ExceedCsThr()) {
+			int new_lambda = NextLambdaThr();
+			SendLambda(mpi_data, new_lambda);
+			getminsup_data->lambda_ = new_lambda;
+			thre_freq_ =
+					thresholds[getminsup_data->lambda_ - 1].first;
+//			thre_pmin_ = thresholds[getminsup_data->lambda_].second;
+		}
 // if SendLambda is called, dtd_.count_ is incremented and DTDCheck will always fail
 		if (DTDReplyReady(mpi_data)) {
 			DTDCheck(mpi_data);
@@ -982,33 +1029,157 @@ void ParallelContinuousPM::RecvDTDAccumReply(MPI_Data& mpi_data,
 	}
 }
 
+int ParallelContinuousPM::GetDiscretizedFrequency(double freq) const {
+	int i = 0;
+	while (freq > thresholds[i].first && i < thresholds.size()) {
+		++i;
+	}
+//	--i;
+	if (i == thresholds.size()) {
+		printf("Fr_d(%.2f) = %d\n", freq, i);
+	} else {
+		assert(thresholds[i].first > freq);
+	}
+	return i;
+}
+
+void ParallelContinuousPM::CheckCSThreshold(MPI_Data& mpi_data) {
+	printf("CheckCSThreshold\n");
+//	assert(mpi_data.mpiRank_ == 0);
+	if (ExceedCsThr()) {
+		printf("Exceeded!\n");
+		int new_lambda = NextLambdaThr();
+		SendLambda(mpi_data, new_lambda);
+		printf("Lambda updated to %d\n", new_lambda);
+		getminsup_data->lambda_ = new_lambda;
+		thre_freq_ = thresholds[getminsup_data->lambda_ - 1].first;
+	} else {
+		printf("Did not exceeded\n");
+
+	}
+}
+
+bool ParallelContinuousPM::ExceedCsThr() const {
+	printf("ExceedCsThr: fr_d = %d, k f(T_k) = %d * %.6f = %.6f\n",
+			getminsup_data->lambda_,
+			getminsup_data->accum_array_[getminsup_data->lambda_],
+			thresholds[getminsup_data->lambda_].second,
+			getminsup_data->accum_array_[getminsup_data->lambda_]
+					* thresholds[getminsup_data->lambda_].second);
+
+	return (getminsup_data->accum_array_[getminsup_data->lambda_]
+			* thresholds[getminsup_data->lambda_].second >= alpha_);
+}
+
+int ParallelContinuousPM::NextLambdaThr() const {
+	printf("NextLambdaThr\n");
+
+	for (int si = getminsup_data->lambda_max_;
+			si >= getminsup_data->lambda_; si--) {
+		if (getminsup_data->accum_array_[si] * thresholds[si].second
+				>= alpha_) {
+			return si + 1;
+		}
+	}
+	assert(false && "NextLambdaThr not returning correct threshold.");
+	return 0;
+// it is safe because lambda_ higher than max results in immediate search finish
+}
+
+void ParallelContinuousPM::IncCsAccum(int sup_num) {
+//	printf("IncCsAccum\n");
+	for (int i = sup_num; i >= getminsup_data->lambda_ - 1; i--)
+		getminsup_data->accum_array_[i]++;
+}
+
+void ParallelContinuousPM::SendLambda(MPI_Data& mpi_data,
+		int lambda) {
+	printf("SendLambda\n");
+// send lambda to bcast_targets_
+	int message[2];
+	message[0] = mpi_data.dtd_->time_zone_;
+	message[1] = lambda;
+
+	for (int i = 0; i < k_echo_tree_branch; i++) {
+		if (mpi_data.bcast_targets_[i] < 0)
+			break;
+		assert(
+				mpi_data.bcast_targets_[i] < mpi_data.nTotalProc_
+						&& "SendLambda");
+		CallBsend(message, 2, MPI_INT, mpi_data.bcast_targets_[i],
+				Tag::LAMBDA);
+		mpi_data.dtd_->OnSend();
+
+		DBG(
+				D(2) << "SendLambda: dst="
+						<< mpi_data.bcast_targets_[i] << "\tlambda="
+						<< lambda << "\tdtd_count="
+						<< mpi_data.dtd_->count_ << std::endl
+				;);
+	}
+}
+
+void ParallelContinuousPM::RecvLambda(MPI_Data& mpi_data, int src) {
+	printf("RecvLambda\n");
+	MPI_Status recv_status;
+	int message[2];
+
+	CallRecv(&message, 2, MPI_INT, src, Tag::LAMBDA, &recv_status);
+	mpi_data.dtd_->OnRecv();
+	assert(src == recv_status.MPI_SOURCE);
+	int timezone = message[0];
+	mpi_data.dtd_->UpdateTimeZone(timezone);
+
+	DBG(
+			D(2) << "RecvLambda: src=" << src << "\tlambda="
+					<< message[1] << "\tdtd_count="
+					<< mpi_data.dtd_->count_ << std::endl
+			;);
+
+	int new_lambda = message[1];
+	if (new_lambda > getminsup_data->lambda_) {
+		SendLambda(mpi_data, new_lambda);
+		getminsup_data->lambda_ = new_lambda;
+		thre_freq_ = thresholds[getminsup_data->lambda_ - 1].first;
+// todo: do database reduction
+	}
+}
+
 std::vector<std::pair<double, double> > ParallelContinuousPM::InitializeThresholdTable(
 		int size, double alpha) {
+	printf("InitializeThresholdTable\n");
 	// TODO: the table should be more efficient with inversed.
-	std::vector<std::pair<double, double> > thresholds(size);
+	std::vector<double> thresholds(size);
 	double max_freq = 1.0;
 	// TODO: Current discretization is way too rough.
 	//       Need to find a way to edit the granularity.
 	for (int i = 0; i < size; ++i) {
-		max_freq = max_freq * 0.5; // TODO
-		thresholds[i].first = max_freq;
-	}
-	for (int i = 0; i < size; ++i) {
-		thresholds[i].second = d_->CalculatePLowerBound(
-				thresholds[i].first);
-		if (thresholds[i].second >= alpha) {
+		max_freq = max_freq * 0.9; // TODO
+		thresholds[i] = max_freq;
+		double pbound = d_->CalculatePLowerBound(thresholds[i]);
+		if (pbound >= alpha) {
 			thresholds.erase(thresholds.begin() + i,
 					thresholds.end());
 			break;
 		}
 	}
-//	printf("The domain of discrete Fr(X) = {0..%d}\n",
-//			thresholds.size());
-//	for (int i = 0; i < thresholds.size(); ++i) {
-//		printf("freq/minp = %.2f/%.6f\n", thresholds[i].first,
-//				thresholds[i].second);
-//	}
-	return thresholds;
+
+	std::sort(thresholds.begin(), thresholds.end());
+
+	std::vector<std::pair<double, double> > table(thresholds.size());
+
+	for (int i = 0; i < thresholds.size(); ++i) {
+		table[i].first = thresholds[i];
+		table[i].second = d_->CalculatePLowerBound(table[i].first);
+	}
+	printf("The domain of discrete Fr(X) = {0..%d}\n",
+			thresholds.size());
+	for (int i = 0; i < thresholds.size(); ++i) {
+		printf("freq/minp = %.2f/%.6f\n", table[i].first,
+				table[i].second);
+	}
+
+	return table;
 }
 
 /**

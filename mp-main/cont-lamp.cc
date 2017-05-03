@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
 		ContDatabase* d = new ContDatabase(item_file, class_file);
 //		d->ShowInfo();
 		MP_CONT_LAMP* search = new MP_CONT_LAMP(d, rank, nu_proc,
-				FLAGS_n, FLAGS_n_is_ms, FLAGS_w, FLAGS_l, FLAGS_m);
+				FLAGS_n, FLAGS_n_is_ms, FLAGS_w, FLAGS_l, FLAGS_m, 1);
 
 		search_start_time = Timer::GetInstance()->Elapsed();
 		search->Search();
