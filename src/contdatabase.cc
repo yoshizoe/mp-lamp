@@ -16,7 +16,8 @@ using namespace std;
 
 namespace lamp_search {
 
-ContDatabase::ContDatabase() {
+ContDatabase::ContDatabase() :
+		nu_transactions_(0), nu_pos_total_(0), nu_items_(0) {
 	// TODO Auto-generated constructor stub
 
 }
@@ -94,6 +95,7 @@ void ContDatabase::readClassFromCSV(istream& ifs) {
 	assert(
 			typeid(Ctype) == typeid(int)
 					&& "Class is not int: need to refactor.");
+	int nu_pos_total_ = 0;
 	string line;
 	while (getline(ifs, line)) {
 		int cls = stoi(line);
@@ -287,7 +289,8 @@ double ContDatabase::kl_max_fast(double freq, int N0, int N) const {
 	}
 }
 
-double ContDatabase::kl_max_fast_bound(double freq, int N0, int N) const {
+double ContDatabase::kl_max_fast_bound(double freq, int N0,
+		int N) const {
 	double r0 = (double) N0 / (double) N;
 //	printf("N0=%d, N=%d, r0=%.2f\n", r0);
 	assert(0 <= r0 && r0 <= 1.0);
@@ -305,7 +308,6 @@ double ContDatabase::kl_max_fast_bound(double freq, int N0, int N) const {
 		return d;
 	}
 }
-
 
 // TODO: Why kl < 0?
 double ContDatabase::kl(double total_freq, double pos_freq) const {
