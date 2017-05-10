@@ -95,11 +95,11 @@ const long long int MP_CONT_LAMP::k_cs_max = 1ll
 const int MP_CONT_LAMP::k_probe_period = 128;
 
 MP_CONT_LAMP::MP_CONT_LAMP(ContDatabase* d, int rank, int nu_proc,
-		int n, bool n_is_ms, int w, int l, int m, int disretizeFreq) :
+		int n, bool n_is_ms, int w, int l, int m, int disretizeFreq, double freqRatio) :
 		d_(d), dtd_(k_echo_tree_branch), mpi_data_(
 				FLAGS_bsend_buffer_size, rank, nu_proc, n, n_is_ms, w,
 				l, m, k_echo_tree_branch, &dtd_), disretizeFreq(
-				disretizeFreq), timer_(Timer::GetInstance()), give_stack_(
+				disretizeFreq), freqRatio(freqRatio), timer_(Timer::GetInstance()), give_stack_(
 				NULL), stealer_(mpi_data_.nRandStealTrials_,
 				mpi_data_.hypercubeDimension_), phase_(0), freq_stack_(
 		NULL), significant_stack_(
@@ -462,24 +462,23 @@ void MP_CONT_LAMP::Search() {
 		if (disretizeFreq == 0) {
 			psearch->GetMinimalSupport();
 		} else if (disretizeFreq == 1) {
-			psearch->GetDiscretizedMinimalSupport();
+			psearch->GetDiscretizedMinimalSupport(freqRatio);
 		} else {
 			assert(false && "discretizeFreq=?");
 		}
 //		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
-
 		thre_freq_ = psearch->GetThreFreq();
 		thre_pmin_ = psearch->GetThrePmin();
 		n_testable = psearch->NumberOfTestablePatterns();
 
+		MPI_Barrier( MPI_COMM_WORLD);
 		// todo: reduce expand_num_
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "1st phase end\n";
-			std::cout << "# " << "thre_freq_=" << thre_freq_;
-			std::cout << "\tnum_expand=" << std::setw(12)
+			std::cout << "# " << "1st phase end: "
+					<< "thre_freq_= " << thre_freq_
+					<< "\tnum_expand= " << std::setw(12)
 					<< expand_num_
-
-					<< "\telapsed_time="
+					<< "\telapsed_time= "
 					<< (timer_->Elapsed() - log_.d_.search_start_time_)
 							/ GIGA << std::endl;
 		}
@@ -490,7 +489,7 @@ void MP_CONT_LAMP::Search() {
 		DBG(D(2) << "---------------" << std::endl
 		;);
 		DBG(
-				D(2) << "thre_freq_=" << thre_freq_ << "thre_pmin_="
+				D(1) << "thre_freq_=" << thre_freq_ << "thre_pmin_="
 						<< thre_pmin_ << "\tnum_expand="
 						<< std::setw(12) << expand_num_
 						<< "\telapsed_time="
@@ -605,12 +604,12 @@ void MP_CONT_LAMP::Search() {
 
 	{
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "2nd phase end\n";
-			std::cout << "# " << "closed_set_num=" << std::setw(12)
-					<< num_final_testable_patterns << "\tsig_lev="
+			std::cout << "# " << "2nd phase end: "
+					<< "closed_set_num= " << std::setw(12)
+					<< num_final_testable_patterns << "\tsig_lev= "
 					<< (FLAGS_a / num_final_testable_patterns)
-					<< "\tnum_expand=" << std::setw(12) << expand_num_
-					<< "\telapsed_time="
+					<< "\tnum_expand= " << std::setw(12) << expand_num_
+					<< "\telapsed_time= "
 					<< (timer_->Elapsed() - log_.d_.search_start_time_)
 							/ GIGA << std::endl;
 		}
@@ -673,9 +672,8 @@ void MP_CONT_LAMP::Search() {
 
 	{
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "3rd phase end\n";
-			std::cout << "# " << "sig_lev=" << final_sig_level_
-					<< "\telapsed_time="
+			std::cout << "# " << "3rd phase end: " << "sig_lev= " << final_sig_level_
+					<< "\telapsed_time= "
 					<< (log_.d_.search_finish_time_
 							- log_.d_.search_start_time_) / GIGA
 					<< std::endl;
@@ -784,7 +782,7 @@ std::ostream & MP_CONT_LAMP::PrintSignificantSet(
 	std::stringstream s;
 //	printf("PrintSignificantSet not implemented\n");
 
-	s << "# number of significant patterns="
+	s << "# number of significant patterns= "
 			<< significant_set_.size() << std::endl;
 	s
 			<< "# pval (raw)    pval (corr)         freq     pos        # items items\n";

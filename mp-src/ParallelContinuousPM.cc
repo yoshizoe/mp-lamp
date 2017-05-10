@@ -65,7 +65,7 @@ void ParallelContinuousPM::GetMinimalSupport() {
 	// return lambda?
 }
 
-void ParallelContinuousPM::GetDiscretizedMinimalSupport() {
+void ParallelContinuousPM::GetDiscretizedMinimalSupport(double freqRatio) {
 	printf("GetDiscretizedMinimalSupport\n");
 //	CheckInit();
 	phase_ = 4; // TODO: remove dependency on this
@@ -73,7 +73,7 @@ void ParallelContinuousPM::GetDiscretizedMinimalSupport() {
 	// TODO: Edit getminsup_data here.
 
 	// TODO: How do we select the discretization???
-	thresholds = InitializeThresholdTable(124, alpha_);
+	thresholds = InitializeThresholdTable(freqRatio, 252, alpha_);
 //	printf("thresholds.size() = %d\n", thresholds.size());
 	long long int* dtd_accum_array_base_ =
 			new long long int[thresholds.size() + 4];
@@ -871,11 +871,11 @@ void ParallelContinuousPM::RecvNewSigLevel(int src) {
 	if (it != frequencies.end()) {
 		int prev_size = frequencies.size();
 		frequencies.erase(it, frequencies.end());
-		printf(
-				"With new thre_freq_=%.8f, freq_stack_ shrank from %d to %d.\n",
-				thre_freq_, prev_size, frequencies.size());
+//		printf(
+//				"With new thre_freq_=%.8f, freq_stack_ shrank from %d to %d.\n",
+//				thre_freq_, prev_size, frequencies.size());
 	} else {
-		printf("All freqs in stack is smaller than thre_freq_\n");
+//		printf("All freqs in stack is smaller than thre_freq_\n");
 	}
 }
 
@@ -1040,7 +1040,8 @@ int ParallelContinuousPM::GetDiscretizedFrequency(double freq) const {
 	}
 //	--i;
 	if (i == thresholds.size()) {
-		printf("Fr_d(%.2f) = %d\n", freq, i);
+//		printf("Fr_d(%.2f) = %d\n", freq, i);
+		--i;
 	} else {
 		assert(thresholds[i].first > freq);
 	}
@@ -1058,18 +1059,18 @@ void ParallelContinuousPM::CheckCSThreshold(MPI_Data& mpi_data) {
 		getminsup_data->lambda_ = new_lambda;
 		thre_freq_ = thresholds[getminsup_data->lambda_ - 1].first;
 	} else {
-		printf("Did not exceeded\n");
+//		printf("Did not exceeded\n");
 
 	}
 }
 
 bool ParallelContinuousPM::ExceedCsThr() const {
-	printf("ExceedCsThr: fr_d = %d, k f(T_k) = %d * %.6f = %.6f\n",
-			getminsup_data->lambda_,
-			getminsup_data->accum_array_[getminsup_data->lambda_],
-			thresholds[getminsup_data->lambda_].second,
-			getminsup_data->accum_array_[getminsup_data->lambda_]
-					* thresholds[getminsup_data->lambda_].second);
+//	printf("ExceedCsThr: fr_d = %d, k f(T_k) = %d * %.6f = %.6f\n",
+//			getminsup_data->lambda_,
+//			getminsup_data->accum_array_[getminsup_data->lambda_],
+//			thresholds[getminsup_data->lambda_].second,
+//			getminsup_data->accum_array_[getminsup_data->lambda_]
+//					* thresholds[getminsup_data->lambda_].second);
 
 	return (getminsup_data->accum_array_[getminsup_data->lambda_]
 			* thresholds[getminsup_data->lambda_].second >= alpha_);
@@ -1128,7 +1129,7 @@ void ParallelContinuousPM::SendLambda(MPI_Data& mpi_data,
 }
 
 void ParallelContinuousPM::RecvLambda(MPI_Data& mpi_data, int src) {
-	printf("RecvLambda\n");
+//	printf("RecvLambda\n");
 	MPI_Status recv_status;
 	int message[2];
 
@@ -1154,7 +1155,7 @@ void ParallelContinuousPM::RecvLambda(MPI_Data& mpi_data, int src) {
 }
 
 std::vector<std::pair<double, double> > ParallelContinuousPM::InitializeThresholdTable(
-		int size, double alpha) {
+		double ratio, int size, double alpha) {
 	printf("InitializeThresholdTable\n");
 	// TODO: the table should be more efficient with inversed.
 	std::vector<double> thresholds(size);
@@ -1162,7 +1163,7 @@ std::vector<std::pair<double, double> > ParallelContinuousPM::InitializeThreshol
 	// TODO: Current discretization is way too rough.
 	//       Need to find a way to edit the granularity.
 	for (int i = 0; i < size; ++i) {
-		max_freq = max_freq * 0.9; // TODO
+		max_freq = max_freq * ratio; // TODO
 		thresholds[i] = max_freq;
 		double pbound = d_->CalculatePLowerBound(thresholds[i]);
 		if (pbound >= alpha) {
@@ -1197,7 +1198,7 @@ std::vector<std::pair<double, double> > ParallelContinuousPM::InitializeThreshol
 
 //==============================================================================
 void ParallelContinuousPM::SendResultRequest(MPI_Data& mpi_data) {
-	printf("SendResultRequest\n");
+//	printf("SendResultRequest\n");
 	int message[1];
 	message[0] = 1; // dummy
 
@@ -1221,7 +1222,7 @@ void ParallelContinuousPM::SendResultRequest(MPI_Data& mpi_data) {
 
 void ParallelContinuousPM::RecvResultRequest(MPI_Data& mpi_data,
 		int src) {
-	printf("RecvResultRequest\n");
+//	printf("RecvResultRequest\n");
 	MPI_Status recv_status;
 	int message[1];
 	CallRecv(&message, 1, MPI_INT, src, Tag::RESULT_REQUEST,
@@ -1238,7 +1239,7 @@ void ParallelContinuousPM::RecvResultRequest(MPI_Data& mpi_data,
 }
 
 void ParallelContinuousPM::SendResultReply(MPI_Data& mpi_data) {
-	printf("SendResultReply\n");
+//	printf("SendResultReply\n");
 	int * message = getsignificant_data->significant_stack_->Stack();
 	int size =
 			getsignificant_data->significant_stack_->UsedCapacity();
@@ -1310,20 +1311,20 @@ void ParallelContinuousPM::RecvResultReply(MPI_Data& mpi_data,
 }
 
 void ParallelContinuousPM::ExtractSignificantSet() {
-	printf("ExtractSignificantSet\n");
+//	printf("ExtractSignificantSet\n");
 
 //	double thre_bonferroni = d_->CalculatePMin(pmin_thre_);
 	std::multimap<double, int *>::iterator it;
-	printf("bonferroni corrected threshold = %.8f (sig_level_)\n",
-			getsignificant_data->final_sig_level_);
-	printf("bonferroni corrected threshold = %.8f (thre_pmin_)\n",
-			thre_pmin_);
+//	printf("bonferroni corrected threshold = %.8f (sig_level_)\n",
+//			getsignificant_data->final_sig_level_);
+//	printf("bonferroni corrected threshold = %.8f (thre_pmin_)\n",
+//			thre_pmin_);
 //	printf("#Testable Pattern = %d (freq_pmin.size())\n",
 //			freq_pmin.size());
-	printf("#Testable Pattern = %.4f (alpha/thre_pmin_)\n",
-			alpha_ / thre_pmin_);
-	printf("#Testable Pattern = %.4f (alpha/final_sig_level_)\n",
-			alpha_ / getsignificant_data->final_sig_level_);
+//	printf("#Testable Pattern = %.4f (alpha/thre_pmin_)\n",
+//			alpha_ / thre_pmin_);
+//	printf("#Testable Pattern = %.4f (alpha/final_sig_level_)\n",
+//			alpha_ / getsignificant_data->final_sig_level_);
 	for (it = getsignificant_data->freq_map_->begin();
 			it != getsignificant_data->freq_map_->end(); ++it) {
 		// TODO: Here we should implement calculating p-value.

@@ -351,28 +351,28 @@ double ContDatabase::kl(double total_freq, double pos_freq) const {
 }
 
 void ContDatabase::ShowInfo() const {
-	printf("#Trans = %d, #Items = %d, #Pos Items = %d\n",
+	printf("#Database: #Trans= %d #Items= %d #PosTrans= %d\n",
 			nu_transactions_, nu_items_, nu_pos_total_);
 
-	printf("features:\n");
-	for (int i = 0; i < nu_items_; i++) {
-		for (int j = 0; j < nu_transactions_; ++j) {
-			printf("%.2f ", features[i][j]);
-		}
-		printf("\n");
-	}
-	printf("classes:\n");
-	for (int i = 0; i < nu_transactions_; i++) {
-		printf("%d ", classes[i]);
-	}
-	printf("\n");
-
-	for (int i = 0; i < nu_items_; i++) {
-		for (int j = 0; j < nu_transactions_; ++j) {
-			assert(0.0 <= features[i][j]);
-			assert(features[i][j] <= 1.001);
-		}
-	}
+//	printf("features:\n");
+//	for (int i = 0; i < nu_items_; i++) {
+//		for (int j = 0; j < nu_transactions_; ++j) {
+//			printf("%.2f ", features[i][j]);
+//		}
+//		printf("\n");
+//	}
+//	printf("classes:\n");
+//	for (int i = 0; i < nu_transactions_; i++) {
+//		printf("%d ", classes[i]);
+//	}
+//	printf("\n");
+//
+//	for (int i = 0; i < nu_items_; i++) {
+//		for (int j = 0; j < nu_transactions_; ++j) {
+//			assert(0.0 <= features[i][j]);
+//			assert(features[i][j] <= 1.001);
+//		}
+//	}
 }
 
 } /* namespace lamp_search */

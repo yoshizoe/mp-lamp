@@ -32,7 +32,7 @@ public:
 
 //	virtual void Search();
 	void GetMinimalSupport();
-	void GetDiscretizedMinimalSupport();
+	void GetDiscretizedMinimalSupport(double freqRatio);
 //	void PreProcessRootNode(GetMinSupData* getminsup_data);
 	void GetTestablePatterns(GetTestableData* gettestable_data);
 	void GetSignificantPatterns(MPI_Data& mpi_data,
@@ -144,7 +144,7 @@ protected:
 	 *
 	 */
 	std::vector<std::pair<double, double>> InitializeThresholdTable(
-			 int size, double alpha);
+			 double ratio, int size, double alpha);
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendDTDAccumRequest(MPI_Data& mpi_data);
 	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
