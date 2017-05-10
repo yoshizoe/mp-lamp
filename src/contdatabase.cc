@@ -354,6 +354,10 @@ double ContDatabase::kl(double total_freq, double pos_freq) const {
 void ContDatabase::ShowInfo() const {
 	printf("#Database: #Trans= %d #Items= %d #PosTrans= %d\n",
 			nu_transactions_, nu_items_, nu_pos_total_);
+	assert(0 < nu_transactions_);
+	assert(0 < nu_items_);
+	assert(0 < nu_pos_total_);
+	assert(nu_pos_total_ < nu_transactions_);
 
 //	printf("features:\n");
 //	for (int i = 0; i < nu_items_; i++) {
