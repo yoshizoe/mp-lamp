@@ -95,7 +95,6 @@ void ContDatabase::readClassFromCSV(istream& ifs) {
 	assert(
 			typeid(Ctype) == typeid(int)
 					&& "Class is not int: need to refactor.");
-	int nu_pos_total_ = 0;
 	string line;
 	while (getline(ifs, line)) {
 		int cls = stoi(line);
