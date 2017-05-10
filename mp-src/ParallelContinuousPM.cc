@@ -73,7 +73,7 @@ void ParallelContinuousPM::GetDiscretizedMinimalSupport() {
 	// TODO: Edit getminsup_data here.
 
 	// TODO: How do we select the discretization???
-	thresholds = InitializeThresholdTable(100, alpha_);
+	thresholds = InitializeThresholdTable(124, alpha_);
 //	printf("thresholds.size() = %d\n", thresholds.size());
 	long long int* dtd_accum_array_base_ =
 			new long long int[thresholds.size() + 4];
@@ -97,7 +97,7 @@ void ParallelContinuousPM::GetDiscretizedMinimalSupport() {
 	// TODO: thre_pmin_ should be alpha / number of items with frequencies higher
 	thre_freq_ = thresholds[getminsup_data->lambda_ - 1].first;
 	// TODO: Where should we put a threshold?
-	thre_pmin_ = thresholds[getminsup_data->lambda_ - 2].second;
+	thre_pmin_ = thresholds[getminsup_data->lambda_ - 1].second;
 
 	// return lambda?
 }
@@ -1088,8 +1088,12 @@ int ParallelContinuousPM::NextLambdaThr() const {
 
 void ParallelContinuousPM::IncCsAccum(int sup_num) {
 //	printf("IncCsAccum\n");
-	for (int i = sup_num; i >= getminsup_data->lambda_ - 1; i--)
+	for (int i = 0; i <= sup_num; i++)
 		getminsup_data->accum_array_[i]++;
+}
+
+int ParallelContinuousPM::NumberOfTestablePatterns() const {
+	return getminsup_data->accum_array_[getminsup_data->lambda_ - 1];
 }
 
 void ParallelContinuousPM::SendLambda(MPI_Data& mpi_data,
@@ -1174,10 +1178,10 @@ std::vector<std::pair<double, double> > ParallelContinuousPM::InitializeThreshol
 	}
 	printf("The domain of discrete Fr(X) = {0..%d}\n",
 			thresholds.size());
-	for (int i = 0; i < thresholds.size(); ++i) {
-		printf("freq/minp = %.2f/%.6f\n", table[i].first,
-				table[i].second);
-	}
+//	for (int i = 0; i < thresholds.size(); ++i) {
+//		printf("freq/minp = %.2f/%.6f\n", table[i].first,
+//				table[i].second);
+//	}
 
 	return table;
 }

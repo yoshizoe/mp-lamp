@@ -38,12 +38,13 @@ public:
 	void GetSignificantPatterns(MPI_Data& mpi_data,
 			GetContSignificantData* getsignificant_data);
 
-	double GetThreFreq() {
+	double GetThreFreq() const {
 		return thre_freq_;
 	}
-	double GetThrePmin() {
+	double GetThrePmin() const {
 		return thre_pmin_;
 	}
+	int NumberOfTestablePatterns() const;
 
 protected:
 	// TODO: How can we hide the dependency on those low level structures?

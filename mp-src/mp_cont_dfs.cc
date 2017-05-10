@@ -430,6 +430,7 @@ void MP_CONT_LAMP::Search() {
 
 	double thre_freq_ = 0.0;
 	double thre_pmin_ = 1.0;
+	int n_testable = 0;
 
 // --------
 // prepare phase 1
@@ -469,6 +470,7 @@ void MP_CONT_LAMP::Search() {
 
 		thre_freq_ = psearch->GetThreFreq();
 		thre_pmin_ = psearch->GetThrePmin();
+		n_testable = psearch->NumberOfTestablePatterns();
 
 		// todo: reduce expand_num_
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
@@ -638,8 +640,8 @@ void MP_CONT_LAMP::Search() {
 			FLAGS_sig_max);
 // significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
 
-//	final_sig_level_ = FLAGS_a / num_final_testable_patterns;
-	final_sig_level_ = psearch->GetThrePmin();
+	final_sig_level_ = FLAGS_a / n_testable;
+//	final_sig_level_ = psearch->GetThrePmin();
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
 // TODO: ?
