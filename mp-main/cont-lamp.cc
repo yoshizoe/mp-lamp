@@ -79,6 +79,7 @@ namespace lamp_search;
 
 int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);
+	printf("CONT-LAMP\n");
 	google::ParseCommandLineFlags(&argc, &argv, true);
 
 	int rank, nu_proc;

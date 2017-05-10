@@ -73,7 +73,7 @@ void ParallelContinuousPM::GetDiscretizedMinimalSupport(double freqRatio) {
 	// TODO: Edit getminsup_data here.
 
 	// TODO: How do we select the discretization???
-	thresholds = InitializeThresholdTable(freqRatio, 252, alpha_);
+	thresholds = InitializeThresholdTable(freqRatio, 128, alpha_);
 //	printf("thresholds.size() = %d\n", thresholds.size());
 	long long int* dtd_accum_array_base_ =
 			new long long int[thresholds.size() + 4];
@@ -1158,18 +1158,17 @@ std::vector<std::pair<double, double> > ParallelContinuousPM::InitializeThreshol
 		double ratio, int size, double alpha) {
 	printf("InitializeThresholdTable\n");
 	// TODO: the table should be more efficient with inversed.
-	std::vector<double> thresholds(size);
+	std::vector<double> thresholds;
 	double max_freq = 1.0;
 	// TODO: Current discretization is way too rough.
 	//       Need to find a way to edit the granularity.
 	for (int i = 0; i < size; ++i) {
 		max_freq = max_freq * ratio; // TODO
-		thresholds[i] = max_freq;
-		double pbound = d_->CalculatePLowerBound(thresholds[i]);
+		double pbound = d_->CalculatePLowerBound(max_freq);
 		if (pbound >= alpha) {
-			thresholds.erase(thresholds.begin() + i,
-					thresholds.end());
 			break;
+		} else {
+			thresholds.push_back(max_freq);
 		}
 	}
 
