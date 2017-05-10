@@ -82,6 +82,10 @@ void ParallelContinuousPM::GetDiscretizedMinimalSupport() {
 	long long int* accum_array_ = &(dtd_accum_array_base_[3]); // TODO: ???
 	long long int* accum_recv_ = &(dtd_accum_recv_base_[3]);
 	long long int* cs_thr_; // TODO: moc
+	for (int i = 0; i < thresholds.size(); ++i) {
+		accum_array_[i] = 0;
+		accum_recv_[i] = 0;
+	}
 //	count.assign(thresholds.size(), 0);
 	int lambda_ = 1;
 	int lambda_max_ = thresholds.size();
