@@ -289,7 +289,7 @@ double ContDatabase::kl_max_fast(double freq, int N0, int N) const {
 
 double ContDatabase::kl_max_fast_bound(double freq, int N0, int N) const {
 	double r0 = (double) N0 / (double) N;
-	printf("N0=%d, N=%d, r0=%.2f\n", r0);
+//	printf("N0=%d, N=%d, r0=%.2f\n", r0);
 	assert(0 <= r0 && r0 <= 1.0);
 	assert(0 <= freq && freq <= 1.0);
 	if (freq < r0) {
