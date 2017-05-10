@@ -1040,7 +1040,7 @@ int ParallelContinuousPM::GetDiscretizedFrequency(double freq) const {
 	}
 //	--i;
 	if (i == thresholds.size()) {
-//		printf("Fr_d(%.2f) = %d\n", freq, i);
+		printf("Fr_d(%.2f) = %d\n", freq, i);
 		--i;
 	} else {
 		assert(thresholds[i].first > freq);

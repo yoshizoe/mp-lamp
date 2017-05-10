@@ -67,7 +67,7 @@ DEFINE_int32(m, 2, "number of maximum random steal candidates"); // 1024 is defa
 DEFINE_int32(l, 2, "power of lifeline graph");
 
 DEFINE_bool(discretize, true, "true if we run awesome");
-DEFINE_double(r, 0.95, "diminishing ratio of the discretized thresholds");
+DEFINE_double(ratio, 0.95, "diminishing ratio of the discretized thresholds");
 
 //
 //DEFINE_bool(straw1, false, "use Strawman1 for comparison");
@@ -95,9 +95,10 @@ int main(int argc, char **argv) {
 		class_file.open(FLAGS_pos.c_str(), std::ios::in);
 		ContDatabase* d = new ContDatabase(item_file, class_file);
 		d->ShowInfo();
+//		exit(0);
 		MP_CONT_LAMP* search = new MP_CONT_LAMP(d, rank, nu_proc,
 				FLAGS_n, FLAGS_n_is_ms, FLAGS_w, FLAGS_l, FLAGS_m,
-				FLAGS_discretize, FLAGS_r);
+				FLAGS_discretize, FLAGS_ratio);
 
 		search_start_time = Timer::GetInstance()->Elapsed();
 		search->Search();
