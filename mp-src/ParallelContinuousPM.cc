@@ -7,7 +7,7 @@
 
 #include "ParallelContinuousPM.h"
 
-#include "google/gflags.h"
+#include "gflags/gflags.h"
 
 #include "mpi_tag.h"
 #include "Log.h"
@@ -118,7 +118,7 @@ void ParallelContinuousPM::GetTestablePatterns(
 	Search();
 }
 
-void ParallelContinuousPM::GetSignificantPatterns(MPI_Data& mpi_data,
+void ParallelContinuousPM::GetSignificantPatterns(
 		GetContSignificantData* getsignificant_data) {
 	this->getsignificant_data = getsignificant_data;
 	DBG(D(1) << "MainLoop" << std::endl
@@ -127,11 +127,11 @@ void ParallelContinuousPM::GetSignificantPatterns(MPI_Data& mpi_data,
 	ExtractSignificantSet();
 	if (mpi_data.mpiRank_ == 0) {
 		printf("sendresults\n");
-		SendResultRequest(mpi_data);
+		SendResultRequest();
 	}
 	printf("probe\n");
 	while (!mpi_data.dtd_->terminated_) {
-		Probe(mpi_data, treesearch_data);
+		Probe(treesearch_data);
 	}
 }
 
@@ -154,21 +154,21 @@ void ParallelContinuousPM::ProcAfterProbe() {
 					if (freq_received) {
 						printf("SendMinPValueRequest because "
 								"stack is empty and freq received\n");
-						SendMinPValueRequest(mpi_data);
+						SendMinPValueRequest();
 					} else {
 						printf(
 								"SendDTDRequest because "
 										"stack is empty and freq not received\n");
-						SendDTDRequest(mpi_data);
+						SendDTDRequest();
 					}
 				}
 			} else if (phase_ == 2) {
 				if (treesearch_data->node_stack_->Empty()) {
-					SendDTDRequest(mpi_data);
+					SendDTDRequest();
 				}
 			} else if (phase_ == 4) {
 				if (treesearch_data->node_stack_->Empty()) {
-					SendDTDAccumRequest(mpi_data);
+					SendDTDAccumRequest();
 				}
 			} else {
 				// unknown phase
@@ -178,7 +178,7 @@ void ParallelContinuousPM::ProcAfterProbe() {
 	}
 }
 
-void ParallelContinuousPM::ProbeExecute(MPI_Data& mpi_data,
+void ParallelContinuousPM::ProbeExecute(
 		TreeSearchData* treesearch_data, MPI_Status* probe_status,
 		int probe_src, int probe_tag) {
 //	printf("ProbeExecute\n");
@@ -189,11 +189,11 @@ void ParallelContinuousPM::ProbeExecute(MPI_Data& mpi_data,
 	 */
 	case Tag::CONT_REQUEST:
 		assert(phase_ == 1);
-		RecvMinPValueRequest(mpi_data, probe_src); // TODO: This can be solved by polymorphism.
+		RecvMinPValueRequest( probe_src); // TODO: This can be solved by polymorphism.
 		break;
 	case Tag::CONT_REPLY:
 		assert(phase_ == 1);
-		RecvMinPValueReply(mpi_data, probe_src, probe_status);
+		RecvMinPValueReply( probe_src, probe_status);
 		break;
 	case Tag::CONT_LAMBDA:
 		assert(phase_ == 1);
@@ -204,24 +204,24 @@ void ParallelContinuousPM::ProbeExecute(MPI_Data& mpi_data,
 		 */
 	case Tag::DTD_ACCUM_REQUEST:
 		assert(phase_ == 4);
-		RecvDTDAccumRequest(mpi_data, probe_src);
+		RecvDTDAccumRequest(probe_src);
 		break;
 	case Tag::DTD_ACCUM_REPLY:
 		assert(phase_ == 4);
-		RecvDTDAccumReply(mpi_data, probe_src);
+		RecvDTDAccumReply( probe_src);
 		break;
 	case Tag::LAMBDA:
 		assert(phase_ == 4);
-		RecvLambda(mpi_data, probe_src);
+		RecvLambda( probe_src);
 		break;
 		/**
 		 * SIGNIFICANTSET
 		 */
 	case Tag::RESULT_REQUEST:
-		RecvResultRequest(mpi_data, probe_src);
+		RecvResultRequest(probe_src);
 		break;
 	case Tag::RESULT_REPLY:
-		RecvResultReply(mpi_data, probe_src, *probe_status);
+		RecvResultReply( probe_src, *probe_status);
 		break;
 
 	default:
@@ -231,7 +231,7 @@ void ParallelContinuousPM::ProbeExecute(MPI_Data& mpi_data,
 						<< std::endl
 				;
 		);
-		ParallelDFS::ProbeExecute(mpi_data, treesearch_data,
+		ParallelDFS::ProbeExecute(treesearch_data,
 				probe_status, probe_src, probe_tag);
 		break;
 	}
@@ -245,16 +245,16 @@ void ParallelContinuousPM::ProbeExecute(MPI_Data& mpi_data,
 /**
  * GetMinSup specific
  */
-void ParallelContinuousPM::Check(MPI_Data& mpi_data) {
+void ParallelContinuousPM::Check() {
 //	printf("Check\n");
 	if (mpi_data.mpiRank_ == 0) {
 		if (phase_ == 1) {
 			if (!mpi_data.echo_waiting_) {
-				SendMinPValueRequest(mpi_data);
+				SendMinPValueRequest();
 			}
 		} else if (phase_ == 4) {
 			if (!mpi_data.echo_waiting_) {
-				CheckCSThreshold(mpi_data);
+				CheckCSThreshold();
 			}
 		} else {
 		}
@@ -264,7 +264,7 @@ void ParallelContinuousPM::Check(MPI_Data& mpi_data) {
 }
 
 // TODO: What does it do after all?
-bool ParallelContinuousPM::ExpandNode(MPI_Data& mpi_data,
+bool ParallelContinuousPM::ExpandNode(
 		TreeSearchData* treesearch_data) {
 //	printf("ExpandNode\n");
 	if (treesearch_data->node_stack_->Empty())
@@ -555,9 +555,9 @@ void ParallelContinuousPM::CheckProbe(int& accum_period_counter_,
 			if (elt - lap_time >= FLAGS_probe_period_ * 1000000) {
 				log_->d_.process_node_time_ += elt - lap_time;
 
-				Probe(mpi_data, treesearch_data);
-				Distribute(mpi_data, treesearch_data);
-				Reject(mpi_data);
+				Probe( treesearch_data);
+				Distribute( treesearch_data);
+				Reject();
 
 				lap_time = timer_->Elapsed();
 			}
@@ -568,9 +568,9 @@ void ParallelContinuousPM::CheckProbe(int& accum_period_counter_,
 			log_->d_.process_node_time_ += timer_->Elapsed()
 					- lap_time;
 
-			Probe(mpi_data, treesearch_data);
-			Distribute(mpi_data, treesearch_data);
-			Reject(mpi_data);
+			Probe( treesearch_data);
+			Distribute( treesearch_data);
+			Reject();
 
 			lap_time = timer_->Elapsed();
 		}
@@ -619,7 +619,7 @@ bool ParallelContinuousPM::HasJobToDo() {
 /**
  * Methods for Maintaining threshold value
  */
-void ParallelContinuousPM::SendMinPValueRequest(MPI_Data& mpi_data) {
+void ParallelContinuousPM::SendMinPValueRequest() {
 	printf("SendMinPValueRequest\n");
 	int message[1];
 	message[0] = 1; // dummy
@@ -643,7 +643,7 @@ void ParallelContinuousPM::SendMinPValueRequest(MPI_Data& mpi_data) {
 	}
 }
 
-void ParallelContinuousPM::RecvMinPValueRequest(MPI_Data& mpi_data,
+void ParallelContinuousPM::RecvMinPValueRequest(
 		int src) {
 	printf("RecvMinPValueRequest\n");
 
@@ -657,13 +657,13 @@ void ParallelContinuousPM::RecvMinPValueRequest(MPI_Data& mpi_data,
 	CallRecv(&message, 1, MPI_INT, src, Tag::CONT_REQUEST,
 			&recv_status);
 
-	if (IsLeafInTopology(mpi_data))
-		SendMinPValueReply(mpi_data);
+	if (IsLeafInTopology())
+		SendMinPValueReply();
 	else
-		SendMinPValueRequest(mpi_data);
+		SendMinPValueRequest();
 }
 
-void ParallelContinuousPM::SendMinPValueReply(MPI_Data& mpi_data) {
+void ParallelContinuousPM::SendMinPValueReply() {
 	printf("SendMinPValueReply\n");
 //	std::sort(freq_stack_.begin(), freq_stack_.end());
 // TODO: Apply pruning items with pmin higher than alpha/k.
@@ -686,7 +686,7 @@ void ParallelContinuousPM::SendMinPValueReply(MPI_Data& mpi_data) {
 }
 
 // getminsup_data
-void ParallelContinuousPM::RecvMinPValueReply(MPI_Data& mpi_data,
+void ParallelContinuousPM::RecvMinPValueReply(
 		int src, MPI_Status* probe_status) {
 
 //	MPI_Status recv_status;
@@ -717,7 +717,7 @@ void ParallelContinuousPM::RecvMinPValueReply(MPI_Data& mpi_data,
 	assert(flag);
 
 	if (mpi_data.mpiRank_ == 0) {
-		if (DTDReplyReady(mpi_data)) {
+		if (DTDReplyReady()) {
 			CalculateThreshold();
 			mpi_data.echo_waiting_ = false;
 			mpi_data.dtd_->ClearAccumFlags();
@@ -730,9 +730,9 @@ void ParallelContinuousPM::RecvMinPValueReply(MPI_Data& mpi_data,
 //			log_->d_.dtd_accum_phase_num_++;
 //		}
 	} else {  // not root
-		if (DTDReplyReady(mpi_data)) {
+		if (DTDReplyReady()) {
 			// TODO: Merge and sort pmins_stack here for efficiency.
-			SendMinPValueReply(mpi_data);
+			SendMinPValueReply();
 		}
 	}
 }
@@ -883,7 +883,7 @@ void ParallelContinuousPM::RecvNewSigLevel(int src) {
  * LINEAR SPACE CONTINUOUS PATTERN MINING
  *
  */
-void ParallelContinuousPM::SendDTDAccumRequest(MPI_Data& mpi_data) {
+void ParallelContinuousPM::SendDTDAccumRequest() {
 	int message[1];
 	message[0] = 1; // dummy
 
@@ -906,7 +906,7 @@ void ParallelContinuousPM::SendDTDAccumRequest(MPI_Data& mpi_data) {
 	}
 }
 
-void ParallelContinuousPM::RecvDTDAccumRequest(MPI_Data& mpi_data,
+void ParallelContinuousPM::RecvDTDAccumRequest(
 		int src) {
 	DBG(
 			D(3) << "RecvDTDAccumRequest: src=" << src
@@ -918,13 +918,13 @@ void ParallelContinuousPM::RecvDTDAccumRequest(MPI_Data& mpi_data,
 	CallRecv(&message, 1, MPI_INT, src, Tag::DTD_ACCUM_REQUEST,
 			&recv_status);
 
-	if (IsLeafInTopology(mpi_data))
-		SendDTDAccumReply(mpi_data);
+	if (IsLeafInTopology())
+		SendDTDAccumReply();
 	else
-		SendDTDAccumRequest(mpi_data);
+		SendDTDAccumRequest();
 }
 
-void ParallelContinuousPM::SendDTDAccumReply(MPI_Data& mpi_data) {
+void ParallelContinuousPM::SendDTDAccumReply() {
 	getminsup_data->dtd_accum_array_base_[0] = mpi_data.dtd_->count_
 			+ mpi_data.dtd_->reduce_count_;
 	bool tw_flag = mpi_data.dtd_->time_warp_
@@ -972,7 +972,7 @@ void ParallelContinuousPM::SendDTDAccumReply(MPI_Data& mpi_data) {
 }
 
 // getminsup_data
-void ParallelContinuousPM::RecvDTDAccumReply(MPI_Data& mpi_data,
+void ParallelContinuousPM::RecvDTDAccumReply(
 		int src) {
 	MPI_Status recv_status;
 
@@ -1016,20 +1016,20 @@ void ParallelContinuousPM::RecvDTDAccumReply(MPI_Data& mpi_data,
 	if (mpi_data.mpiRank_ == 0) {
 		if (ExceedCsThr()) {
 			int new_lambda = NextLambdaThr();
-			SendLambda(mpi_data, new_lambda);
+			SendLambda(new_lambda);
 			getminsup_data->lambda_ = new_lambda;
 			thre_freq_ =
 					thresholds[getminsup_data->lambda_ - 1].first;
 //			thre_pmin_ = thresholds[getminsup_data->lambda_].second;
 		}
 // if SendLambda is called, dtd_.count_ is incremented and DTDCheck will always fail
-		if (DTDReplyReady(mpi_data)) {
-			DTDCheck(mpi_data);
+		if (DTDReplyReady()) {
+			DTDCheck();
 			log_->d_.dtd_accum_phase_num_++;
 		}
 	} else {  // not root
-		if (DTDReplyReady(mpi_data))
-			SendDTDAccumReply(mpi_data);
+		if (DTDReplyReady())
+			SendDTDAccumReply();
 	}
 }
 
@@ -1048,13 +1048,13 @@ int ParallelContinuousPM::GetDiscretizedFrequency(double freq) const {
 	return i;
 }
 
-void ParallelContinuousPM::CheckCSThreshold(MPI_Data& mpi_data) {
+void ParallelContinuousPM::CheckCSThreshold() {
 	printf("CheckCSThreshold\n");
 //	assert(mpi_data.mpiRank_ == 0);
 	if (ExceedCsThr()) {
 		printf("Exceeded!\n");
 		int new_lambda = NextLambdaThr();
-		SendLambda(mpi_data, new_lambda);
+		SendLambda( new_lambda);
 		printf("Lambda updated to %d\n", new_lambda);
 		getminsup_data->lambda_ = new_lambda;
 		thre_freq_ = thresholds[getminsup_data->lambda_ - 1].first;
@@ -1101,7 +1101,7 @@ int ParallelContinuousPM::NumberOfTestablePatterns() const {
 	return getminsup_data->accum_array_[getminsup_data->lambda_ - 1];
 }
 
-void ParallelContinuousPM::SendLambda(MPI_Data& mpi_data,
+void ParallelContinuousPM::SendLambda(
 		int lambda) {
 	printf("SendLambda\n");
 // send lambda to bcast_targets_
@@ -1128,7 +1128,7 @@ void ParallelContinuousPM::SendLambda(MPI_Data& mpi_data,
 	}
 }
 
-void ParallelContinuousPM::RecvLambda(MPI_Data& mpi_data, int src) {
+void ParallelContinuousPM::RecvLambda(int src) {
 //	printf("RecvLambda\n");
 	MPI_Status recv_status;
 	int message[2];
@@ -1147,7 +1147,7 @@ void ParallelContinuousPM::RecvLambda(MPI_Data& mpi_data, int src) {
 
 	int new_lambda = message[1];
 	if (new_lambda > getminsup_data->lambda_) {
-		SendLambda(mpi_data, new_lambda);
+		SendLambda(new_lambda);
 		getminsup_data->lambda_ = new_lambda;
 		thre_freq_ = thresholds[getminsup_data->lambda_ - 1].first;
 // todo: do database reduction
@@ -1196,7 +1196,7 @@ std::vector<std::pair<double, double> > ParallelContinuousPM::InitializeThreshol
  */
 
 //==============================================================================
-void ParallelContinuousPM::SendResultRequest(MPI_Data& mpi_data) {
+void ParallelContinuousPM::SendResultRequest() {
 //	printf("SendResultRequest\n");
 	int message[1];
 	message[0] = 1; // dummy
@@ -1219,7 +1219,7 @@ void ParallelContinuousPM::SendResultRequest(MPI_Data& mpi_data) {
 	}
 }
 
-void ParallelContinuousPM::RecvResultRequest(MPI_Data& mpi_data,
+void ParallelContinuousPM::RecvResultRequest(
 		int src) {
 //	printf("RecvResultRequest\n");
 	MPI_Status recv_status;
@@ -1231,13 +1231,13 @@ void ParallelContinuousPM::RecvResultRequest(MPI_Data& mpi_data,
 	DBG(D(2) << "RecvResultRequest: src=" << src << std::endl
 	;);
 
-	if (IsLeafInTopology(mpi_data))
-		SendResultReply(mpi_data);
+	if (IsLeafInTopology())
+		SendResultReply();
 	else
-		SendResultRequest(mpi_data);
+		SendResultRequest();
 }
 
-void ParallelContinuousPM::SendResultReply(MPI_Data& mpi_data) {
+void ParallelContinuousPM::SendResultReply() {
 //	printf("SendResultReply\n");
 	int * message = getsignificant_data->significant_stack_->Stack();
 	int size =
@@ -1259,7 +1259,7 @@ void ParallelContinuousPM::SendResultReply(MPI_Data& mpi_data) {
 	mpi_data.dtd_->terminated_ = true;
 }
 
-void ParallelContinuousPM::RecvResultReply(MPI_Data& mpi_data,
+void ParallelContinuousPM::RecvResultReply(
 		int src, MPI_Status probe_status) {
 	printf("RecvResultReply\n");
 	int count;
@@ -1299,9 +1299,9 @@ void ParallelContinuousPM::RecvResultReply(MPI_Data& mpi_data,
 	}
 	assert(flag);
 
-	if (AccumCountReady(mpi_data)) {
+	if (AccumCountReady()) {
 		if (mpi_data.mpiRank_ != 0) {
-			SendResultReply(mpi_data);
+			SendResultReply();
 		} else { // root
 			mpi_data.echo_waiting_ = false;
 			mpi_data.dtd_->terminated_ = true;

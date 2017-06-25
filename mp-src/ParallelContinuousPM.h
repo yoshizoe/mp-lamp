@@ -35,7 +35,7 @@ public:
 	void GetDiscretizedMinimalSupport(double freqRatio);
 //	void PreProcessRootNode(GetMinSupData* getminsup_data);
 	void GetTestablePatterns(GetTestableData* gettestable_data);
-	void GetSignificantPatterns(MPI_Data& mpi_data,
+	void GetSignificantPatterns(
 			GetContSignificantData* getsignificant_data);
 
 	double GetThreFreq() const {
@@ -74,15 +74,15 @@ protected:
 	 *
 	 */
 //	bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	virtual void ProbeExecute(MPI_Data& mpi_data,
+	virtual void ProbeExecute(
 			TreeSearchData* treesearch_data, MPI_Status* probe_status,
 			int probe_src, int probe_tag);
 //	bool ProbeExecuteMINSUP(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 //			MPI_Status& probe_status, int probe_src, int probe_tag);
 
 	void ProcAfterProbe(); // DOMAINDEPENDENT
-	void Check(MPI_Data& mpi_data); // DOMAINDEPENDENT
-	bool ExpandNode(MPI_Data& mpi_data,
+	void Check(); // DOMAINDEPENDENT
+	bool ExpandNode(
 			TreeSearchData*treesearch_data);
 	std::vector<int> GetChildren(std::vector<int> items); // DOMAINDEPENDENT
 	bool PopNodeFromStack();
@@ -103,11 +103,11 @@ protected:
 	 * Methods for Maintaining threshold value
 	 */
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendMinPValueRequest(MPI_Data& mpi_data);
-	void RecvMinPValueRequest(MPI_Data& mpi_data, int src);
+	void SendMinPValueRequest();
+	void RecvMinPValueRequest(int src);
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendMinPValueReply(MPI_Data& mpi_data);
-	void RecvMinPValueReply(MPI_Data& mpi_data, int src,
+	void SendMinPValueReply();
+	void RecvMinPValueReply(int src,
 			MPI_Status* probe_status);
 	void CalculateThreshold();
 	void SendNewSigLevel(double sig_level);
@@ -126,10 +126,10 @@ protected:
 	/**
 	 * Methods For GetSignificant
 	 */
-	void SendResultRequest(MPI_Data& mpi_data);
-	void RecvResultRequest(MPI_Data& mpi_data, int src);
-	void SendResultReply(MPI_Data& mpi_data);
-	void RecvResultReply(MPI_Data& mpi_data, int src,
+	void SendResultRequest();
+	void RecvResultRequest(int src);
+	void SendResultReply();
+	void RecvResultReply(int src,
 			MPI_Status status);
 //	bool AccumCountReady(MPI_Data& mpi_data) const;
 	void ExtractSignificantSet();
@@ -146,18 +146,18 @@ protected:
 	std::vector<std::pair<double, double>> InitializeThresholdTable(
 			 double ratio, int size, double alpha);
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendDTDAccumRequest(MPI_Data& mpi_data);
-	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
+	void SendDTDAccumRequest();
+	void RecvDTDAccumRequest(int src);
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendDTDAccumReply(MPI_Data& mpi_data);
-	void RecvDTDAccumReply(MPI_Data& mpi_data, int src);
+	void SendDTDAccumReply();
+	void RecvDTDAccumReply(int src);
 	int GetDiscretizedFrequency(double freq) const;
-	void CheckCSThreshold(MPI_Data& mpi_data);
+	void CheckCSThreshold();
 	bool ExceedCsThr() const;
 	int NextLambdaThr() const;
 	void IncCsAccum(int sup_num);
-	void SendLambda(MPI_Data& mpi_data, int lambda);
-	void RecvLambda(MPI_Data& mpi_data, int src);
+	void SendLambda(int lambda);
+	void RecvLambda(int src);
 	std::vector<std::pair<double, double>> thresholds;
 //	std::vector<int> count;
 

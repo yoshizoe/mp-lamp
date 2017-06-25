@@ -28,61 +28,61 @@ protected:
 	/**
 	 * Parallel Search Basic Methods.
 	 */
-	virtual bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	virtual void ProbeExecute(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+	virtual bool Probe(TreeSearchData* treesearch_data);
+	virtual void ProbeExecute(TreeSearchData* treesearch_data,
 			MPI_Status* probe_status, int probe_src, int probe_tag);
-	virtual void Distribute(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	virtual void Give(MPI_Data& mpi_data, VariableLengthItemsetStack * st,
+	virtual void Distribute(TreeSearchData* treesearch_data);
+	virtual void Give(VariableLengthItemsetStack * st,
 			int steal_num) ;
-	virtual void Reject(MPI_Data& mpi_data);
-	virtual void Steal(MPI_Data& mpi_data);
+	virtual void Reject();
+	virtual void Steal();
 
 	virtual void ProcAfterProbe() = 0;
-	virtual void Check(MPI_Data& mpi_data) = 0;
-	virtual bool ExpandNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data) = 0;
+	virtual void Check() = 0;
+	virtual bool ExpandNode(TreeSearchData*treesearch_data) = 0;
 
-	bool AccumCountReady(MPI_Data& mpi_data) const;
+	bool AccumCountReady() const;
 	/**
 	 * ProbeExecute implementation
 	 */
 	// 0: count, 1: time warp flag, 2: empty flag
-	void SendDTDRequest(MPI_Data& mpi_data);
-	void RecvDTDRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+	void SendDTDRequest();
+	void RecvDTDRequest(TreeSearchData* treesearch_data,
 			int src);
 
-	bool DTDReplyReady(MPI_Data& mpi_data) const;
-	void DTDCheck(MPI_Data& mpi_data);
+	bool DTDReplyReady() const;
+	void DTDCheck();
 
 	// 0: count, 1: time warp flag, 2: empty flag
-	void SendDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	void RecvDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+	void SendDTDReply(TreeSearchData* treesearch_data);
+	void RecvDTDReply(TreeSearchData* treesearch_data,
 			int src);
 	virtual bool HasJobToDo();
 
-	void SendBcastFinish(MPI_Data& mpi_data);
-	void RecvBcastFinish(MPI_Data& mpi_data, int src);
+	void SendBcastFinish();
+	void RecvBcastFinish(int src);
 
-	void SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline); // for random thieves, is_lifeline = -1
-	void RecvRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+	void SendRequest(int dst, int is_lifeline); // for random thieves, is_lifeline = -1
+	void RecvRequest(TreeSearchData* treesearch_data,
 			int src);
 
 	// 0: time zone, 1: is_lifeline
-	void SendReject(MPI_Data& mpi_data, int dst);
-	void RecvReject(MPI_Data& mpi_data, int src);
+	void SendReject(int dst);
+	void RecvReject(int src);
 
 	// 1: time zone
-	void SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int dst,
+	void SendGive(VariableLengthItemsetStack * st, int dst,
 			int is_lifeline);
 
 	// sets lifelines_activated_ = false
 	// lifelines_activated_ becomes false only in this case (reject does NOT)
-	void RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data, int src,
+	void RecvGive(TreeSearchData* treesearch_data, int src,
 			MPI_Status status);
 
 	/**
 	 * Network
 	 */
-	bool IsLeafInTopology(MPI_Data& mpi_data) const;
+	bool IsLeafInTopology() const;
 
 	/**
 	 * Helper methods to encapsulate MPI operations with timer and logger.

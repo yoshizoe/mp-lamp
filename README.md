@@ -195,13 +195,24 @@ $ mpiexec -np 2 ./mp-lamp --item ./samples/sample_data/sample_item.csv --pos ./s
 * Current version is only targeted for data with small number of transactions.
   For data with more than 100,000 transactions, please wait for the future updates.
 
+
+## Optional
+
+* mpiP (http://mpip.sourceforge.net/) is recommended for profiling MPI program.
+
 ## Contact
 
 Please contact the following for bug reports, comments, or requests.
 
 * yoshizoe(AT)acm.org
+* ddyuudd(AT)gmail.com 
 
 ## License
 
 MP-LAMP is an open source code project licensed under the Revised BSD license.
 
+
+## Author
+
+Kazuki Yoshizoe implemented MP-LAMP for binary features.
+Yuu Jinnai modified the code to implement continuous features.

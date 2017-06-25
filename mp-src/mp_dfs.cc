@@ -41,6 +41,7 @@
 #include "gflags/gflags.h"
 #include "mp_dfs.h"
 #include "ParallelPatternMining.h"
+#include  "../src/database.h"
 
 #ifdef __CDT_PARSER__
 #undef DBG
@@ -877,7 +878,7 @@ void MP_LAMP::Search() {
 		getsignificant_data_ = new GetSignificantData(freq_stack_, &freq_map_,
 				final_sig_level_, significant_stack_, &significant_set_);
 //		GetSignificantPatterns(mpi_data_, getsignificant_data_);
-		psearch->GetSignificantPatterns(mpi_data_, getsignificant_data_);
+		psearch->GetSignificantPatterns(getsignificant_data_);
 		// TODO: put back to global variables.
 	}
 

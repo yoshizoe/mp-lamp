@@ -1,6 +1,16 @@
-#!/bin/sh
+#!/bin/bash
 
-#mpiexec -np  3 ./cont-lamp --item ./samples/cont_data/synth_100_10.data --pos  ./samples/cont_data/synth_100_10.class  --show_progress true --log true
-mpiexec -np  3 ./cont-lamp --item ./samples/cont_data/synth_400_30.data --pos  ./samples/cont_data/synth_400_30.class  --show_progress true --log true
-#mpiexec -np  3 ./cont-lamp --item ./samples/cont_data/synth_1000_20.data --pos  ./samples/cont_data/synth_1000_20.class  --show_progress true --log true
+#cd ..
+INSTDIR=./samples/cont_data
+WDIR=/home/yuu/workspace/mp-lamp
+
+if [ $method == "mahito" ]
+then
+#    mpirun -bootstrap sge $WDIR/cont-lamp --item ${INSTDIR}/${instance}.data --pos ${INSTDIR}/${instance}.class  --show_progress true --log true -discretize false
+    mpiexec $WDIR/cont-lamp --item ${INSTDIR}/${instance}.data --pos ${INSTDIR}/${instance}.class  --show_progress true --log true -discretize false
+else
+    mpiexec $WDIR/cont-lamp --item ${INSTDIR}/${instance}.data --pos ${INSTDIR}/${instance}.class  --show_progress true --log true -discretize true -ratio 0.95
+#    mpirun -bootstrap sge $WDIR/cont-lamp --item ${INSTDIR}/${instance}.data --pos ${INSTDIR}/${instance}.class  --show_progress true --log true -discretize true -r 0.95
+fi
+
 

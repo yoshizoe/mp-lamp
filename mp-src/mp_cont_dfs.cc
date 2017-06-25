@@ -95,12 +95,14 @@ const long long int MP_CONT_LAMP::k_cs_max = 1ll
 const int MP_CONT_LAMP::k_probe_period = 128;
 
 MP_CONT_LAMP::MP_CONT_LAMP(ContDatabase* d, int rank, int nu_proc,
-		int n, bool n_is_ms, int w, int l, int m, int disretizeFreq, double freqRatio) :
+		int n, bool n_is_ms, int w, int l, int m, int disretizeFreq,
+		double freqRatio) :
 		d_(d), dtd_(k_echo_tree_branch), mpi_data_(
 				FLAGS_bsend_buffer_size, rank, nu_proc, n, n_is_ms, w,
 				l, m, k_echo_tree_branch, &dtd_), disretizeFreq(
-				disretizeFreq), freqRatio(freqRatio), timer_(Timer::GetInstance()), give_stack_(
-				NULL), stealer_(mpi_data_.nRandStealTrials_,
+				disretizeFreq), freqRatio(freqRatio), timer_(
+				Timer::GetInstance()), give_stack_(
+		NULL), stealer_(mpi_data_.nRandStealTrials_,
 				mpi_data_.hypercubeDimension_), phase_(0), freq_stack_(
 		NULL), significant_stack_(
 		NULL), total_expand_num_(0ll), expand_num_(0ll), closed_set_num_(
@@ -474,11 +476,9 @@ void MP_CONT_LAMP::Search() {
 		MPI_Barrier( MPI_COMM_WORLD);
 		// todo: reduce expand_num_
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "1st phase end: "
-					<< "thre_freq_= " << thre_freq_
-					<< "\tnum_expand= " << std::setw(12)
-					<< expand_num_
-					<< "\telapsed_time= "
+			std::cout << "# " << "1st phase end: " << "thre_freq_= "
+					<< thre_freq_ << "\tnum_expand= " << std::setw(12)
+					<< expand_num_ << "\telapsed_time= "
 					<< (timer_->Elapsed() - log_.d_.search_start_time_)
 							/ GIGA << std::endl;
 		}
@@ -608,8 +608,8 @@ void MP_CONT_LAMP::Search() {
 					<< "closed_set_num= " << std::setw(12)
 					<< num_final_testable_patterns << "\tsig_lev= "
 					<< (FLAGS_a / num_final_testable_patterns)
-					<< "\tnum_expand= " << std::setw(12) << expand_num_
-					<< "\telapsed_time= "
+					<< "\tnum_expand= " << std::setw(12)
+					<< expand_num_ << "\telapsed_time= "
 					<< (timer_->Elapsed() - log_.d_.search_start_time_)
 							/ GIGA << std::endl;
 		}
@@ -656,8 +656,7 @@ void MP_CONT_LAMP::Search() {
 //				&freq_map_, final_sig_level_, significant_stack_,
 //				&significant_set_);
 //		GetSignificantPatterns(mpi_data_, getsignificant_data_);
-		psearch->GetSignificantPatterns(mpi_data_,
-				getsignificant_data_);
+		psearch->GetSignificantPatterns(getsignificant_data_);
 		// TODO: put back to global variables.
 	}
 
@@ -672,8 +671,8 @@ void MP_CONT_LAMP::Search() {
 
 	{
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
-			std::cout << "# " << "3rd phase end: " << "sig_lev= " << final_sig_level_
-					<< "\telapsed_time= "
+			std::cout << "# " << "3rd phase end: " << "sig_lev= "
+					<< final_sig_level_ << "\telapsed_time= "
 					<< (log_.d_.search_finish_time_
 							- log_.d_.search_start_time_) / GIGA
 					<< std::endl;

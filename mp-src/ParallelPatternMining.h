@@ -23,15 +23,16 @@ namespace lamp_search {
  */
 class ParallelPatternMining: public ParallelDFS {
 public:
-	ParallelPatternMining(BinaryPatternMiningData* bpm_data, MPI_Data& mpi_data,
-			TreeSearchData* treesearch_data, Log* log, Timer* timer, std::ostream& ofs);
+	ParallelPatternMining(BinaryPatternMiningData* bpm_data,
+			MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+			Log* log, Timer* timer, std::ostream& ofs);
 	virtual ~ParallelPatternMining();
 
 //	virtual void Search();
 	void GetMinimalSupport(GetMinSupData* getminsup_data);
 	void PreProcessRootNode(GetMinSupData* getminsup_data);
 	void GetTestablePatterns(GetTestableData* gettestable_data);
-	void GetSignificantPatterns(MPI_Data& mpi_data,
+	void GetSignificantPatterns(
 			GetSignificantData* getsignificant_data);
 
 protected:
@@ -62,7 +63,7 @@ protected:
 	 *
 	 */
 //	bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	virtual void ProbeExecute(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
+	virtual void ProbeExecute(TreeSearchData* treesearch_data,
 			MPI_Status* probe_status, int probe_src, int probe_tag);
 //	bool ProbeExecuteMINSUP(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 //			MPI_Status& probe_status, int probe_src, int probe_tag);
@@ -74,91 +75,47 @@ protected:
 //	void Reject(MPI_Data& mpi_data);
 //	void Steal(MPI_Data& mpi_data);
 	void ProcAfterProbe(); // DOMAINDEPENDENT
-	void Check(MPI_Data& mpi_data); // DOMAINDEPENDENT
-	bool ExpandNode(MPI_Data& mpi_data, TreeSearchData*treesearch_data);
+	void Check(); // DOMAINDEPENDENT
+	bool ExpandNode(TreeSearchData*treesearch_data);
 	std::vector<int> GetChildren(int core_i); // DOMAINDEPENDENT
 	void PopNodeFromStack();
 	bool TestAndPushNode(int new_item, int core_i);
 	void ProcessNode(int sup_num, int* ppc_ext_buf);
-	void CheckProbe(int& accum_period_counter_, long long int lap_time);
+	void CheckProbe(int& accum_period_counter_,
+			long long int lap_time);
 	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
 			long long int start_time);
-	/**
-	 * Methods for Probe and Send.
-	 *
-	 */
-
-//	// 0: count, 1: time warp flag, 2: empty flag
-//	void SendDTDRequest(MPI_Data& mpi_data);
-//	void RecvDTDRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-//			int src);
-//
-//	bool DTDReplyReady(MPI_Data& mpi_data) const;
-//	void DTDCheck(MPI_Data& mpi_data);
-//
-//	// 0: count, 1: time warp flag, 2: empty flag
-//	void SendDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-//	void RecvDTDReply(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-//			int src);
-
-//	bool DTDAccumReady(MPI_Data& mpi_data) const;
-
-//	void SendBcastFinish(MPI_Data& mpi_data);
-//	void RecvBcastFinish(MPI_Data& mpi_data, int src);
 
 	//--------
 
 	int phase_; // 1, 2, 3
-
-	//--------
-	// basic
-
-	// send recv functions
-//	void SendRequest(MPI_Data& mpi_data, int dst, int is_lifeline); // for random thieves, is_lifeline = -1
-//	void RecvRequest(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-//			int src);
-//
-//	// 0: time zone, 1: is_lifeline
-//	void SendReject(MPI_Data& mpi_data, int dst);
-//	void RecvReject(MPI_Data& mpi_data, int src);
-//
-//	// 1: time zone
-//	void SendGive(MPI_Data& mpi_data, VariableLengthItemsetStack * st, int dst,
-//			int is_lifeline);
-//
-//	// sets lifelines_activated_ = false
-//	// lifelines_activated_ becomes false only in this case (reject does NOT)
-//	void RecvGive(MPI_Data& mpi_data, TreeSearchData* treesearch_data, int src,
-//			MPI_Status status);
-
 
 	/**
 	 * GetMinSup Functions
 	 *
 	 */
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendDTDAccumRequest(MPI_Data& mpi_data);
-	void RecvDTDAccumRequest(MPI_Data& mpi_data, int src);
+	void SendDTDAccumRequest();
+	void RecvDTDAccumRequest(int src);
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
-	void SendDTDAccumReply(MPI_Data& mpi_data);
-	void RecvDTDAccumReply(MPI_Data& mpi_data, int src);
-	void SendLambda(MPI_Data& mpi_data, int lambda);
-	void RecvLambda(MPI_Data& mpi_data, int src);
-	void CheckCSThreshold(MPI_Data& mpi_data);
+	void SendDTDAccumReply();
+	void RecvDTDAccumReply(int src);
+	void SendLambda(int lambda);
+	void RecvLambda(int src);
+	void CheckCSThreshold();
 	bool ExceedCsThr() const; // getMinSup
 	int NextLambdaThr() const; // getMinSup
 //	int NextLambdaThr(GetMinSupData* getminsup_data) const; // getMinSup
 	void IncCsAccum(int sup_num); // getMinSup
 
-
 	// TODO: These functions should be factored in Get
 	/**
 	 * Methods For GetSignificant
 	 */
-	void SendResultRequest(MPI_Data& mpi_data);
-	void RecvResultRequest(MPI_Data& mpi_data, int src);
-	void SendResultReply(MPI_Data& mpi_data);
-	void RecvResultReply(MPI_Data& mpi_data, int src, MPI_Status status);
+	void SendResultRequest();
+	void RecvResultRequest(int src);
+	void SendResultReply();
+	void RecvResultReply(int src, MPI_Status status);
 	void ExtractSignificantSet();
 
 // insert pointer into significant_map_ (do not sort the stack itself)

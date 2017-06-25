@@ -40,20 +40,20 @@ void ParallelDFS::Search() {
 	; );
 	while (!mpi_data.dtd_->terminated_) {
 		while (!mpi_data.dtd_->terminated_) {
-			if (ExpandNode(mpi_data, treesearch_data)) {
+			if (ExpandNode(treesearch_data)) {
 				log_->d_.node_stack_max_itm_ =
 						std::max(log_->d_.node_stack_max_itm_,
 								(long long int) (treesearch_data->node_stack_->NuItemset()));
 				log_->d_.node_stack_max_cap_ =
 						std::max(log_->d_.node_stack_max_cap_,
 								(long long int) (treesearch_data->node_stack_->UsedCapacity()));
-				Probe(mpi_data, treesearch_data);
+				Probe(treesearch_data);
 				if (mpi_data.dtd_->terminated_)
 					break;
-				Distribute(mpi_data, treesearch_data);
-				Reject(mpi_data); // distribute finished, reject remaining requests
+				Distribute(treesearch_data);
+				Reject(); // distribute finished, reject remaining requests
 
-				Check(mpi_data); // Implement CheckCSThreshold().
+				Check(); // Implement CheckCSThreshold().
 
 			} else
 				break;
@@ -62,21 +62,21 @@ void ParallelDFS::Search() {
 			break;
 
 		log_->idle_start_ = timer_->Elapsed();
-		Reject(mpi_data); // node_stack_ empty. reject requests
-		Steal(mpi_data); // request steal
+		Reject(); // node_stack_ empty. reject requests
+		Steal(); // request steal
 		if (mpi_data.dtd_->terminated_) {
 			log_->d_.idle_time_ += timer_->Elapsed()
 					- log_->idle_start_;
 			break;
 		}
 
-		Probe(mpi_data, treesearch_data);
+		Probe(treesearch_data);
 		if (mpi_data.dtd_->terminated_) {
 			log_->d_.idle_time_ += timer_->Elapsed()
 					- log_->idle_start_;
 			break;
 		}
-		Check(mpi_data); // Implement CheckCSThreshold().
+		Check(); // Implement CheckCSThreshold().
 
 		log_->d_.idle_time_ += timer_->Elapsed() - log_->idle_start_;
 	}
@@ -84,8 +84,7 @@ void ParallelDFS::Search() {
 
 //==============================================================================
 
-bool ParallelDFS::Probe(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data) {
+bool ParallelDFS::Probe(TreeSearchData* treesearch_data) {
 	DBG(D(3) << "Probe" << std::endl
 	; );
 	MPI_Status probe_status;
@@ -101,8 +100,8 @@ bool ParallelDFS::Probe(MPI_Data& mpi_data,
 				D(4) << "CallIprobe returned src=" << probe_src
 						<< "\ttag=" << probe_tag << std::endl
 				; );
-		ProbeExecute(mpi_data, treesearch_data, &probe_status,
-				probe_src, probe_tag);
+		ProbeExecute(treesearch_data, &probe_status, probe_src,
+				probe_tag);
 	}
 
 	// capacity, lambda, phase
@@ -119,8 +118,7 @@ bool ParallelDFS::Probe(MPI_Data& mpi_data,
 			log_->d_.probe_time_max_);
 }
 
-void ParallelDFS::Distribute(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data) {
+void ParallelDFS::Distribute(TreeSearchData* treesearch_data) {
 	if (mpi_data.nTotalProc_ == 1)
 		return;
 	DBG(D(3) << "Distribute" << std::endl
@@ -134,15 +132,15 @@ void ParallelDFS::Distribute(MPI_Data& mpi_data,
 			; );
 			DBG(treesearch_data->give_stack_->PrintAll(D(3, false))
 			; );
-			Give(mpi_data, treesearch_data->give_stack_, steal_num);
+			Give(treesearch_data->give_stack_, steal_num);
 			treesearch_data->give_stack_->Clear();
 		}
 	}
 }
 
 // TODO ParallelDFS
-void ParallelDFS::Give(MPI_Data& mpi_data,
-		VariableLengthItemsetStack * st, int steal_num) {
+void ParallelDFS::Give(VariableLengthItemsetStack * st,
+		int steal_num) {
 	DBG(D(3) << "Give: "
 	; );
 	if (mpi_data.thieves_->Size() > 0) { // random thieves
@@ -154,7 +152,7 @@ void ParallelDFS::Give(MPI_Data& mpi_data,
 					; );
 			log_->d_.lifeline_given_num_++;
 			log_->d_.lifeline_nodes_given_ += steal_num;
-			SendGive(mpi_data, st, thief, mpi_data.mpiRank_);
+			SendGive(st, thief, mpi_data.mpiRank_);
 		} else { // random thief
 			DBG(
 					D(3, false) << "thief=" << (-thief - 1)
@@ -162,7 +160,7 @@ void ParallelDFS::Give(MPI_Data& mpi_data,
 					; );
 			log_->d_.given_num_++;
 			log_->d_.nodes_given_ += steal_num;
-			SendGive(mpi_data, st, (-thief - 1), -1);
+			SendGive(st, (-thief - 1), -1);
 		}
 	} else {
 		assert(mpi_data.lifeline_thieves_->Size() > 0);
@@ -174,11 +172,11 @@ void ParallelDFS::Give(MPI_Data& mpi_data,
 				; );
 		log_->d_.lifeline_given_num_++;
 		log_->d_.lifeline_nodes_given_ += steal_num;
-		SendGive(mpi_data, st, thief, mpi_data.mpiRank_);
+		SendGive(st, thief, mpi_data.mpiRank_);
 	}
 }
 // TODO ParallelDFS
-void ParallelDFS::Reject(MPI_Data& mpi_data) {
+void ParallelDFS::Reject() {
 	if (mpi_data.nTotalProc_ == 1)
 		return;
 	DBG(D(3) << "Reject" << std::endl
@@ -188,15 +186,15 @@ void ParallelDFS::Reject(MPI_Data& mpi_data) {
 		int thief = mpi_data.thieves_->Pop();
 		if (thief >= 0) { // lifeline thief
 			mpi_data.lifeline_thieves_->Push(thief);
-			SendReject(mpi_data, thief);
+			SendReject(thief);
 		} else { // random thief
-			SendReject(mpi_data, -thief - 1);
+			SendReject(-thief - 1);
 		}
 	}
 }
 
 // TODO ParallelDFS
-void ParallelDFS::Steal(MPI_Data& mpi_data) {
+void ParallelDFS::Steal() {
 	DBG(D(3) << "Steal" << std::endl
 	; );
 	if (mpi_data.nTotalProc_ == 1)
@@ -214,7 +212,7 @@ void ParallelDFS::Steal(MPI_Data& mpi_data) {
 	case StealState::RANDOM: {
 		int victim = mpi_data.victims_[mpi_data.rand_m_()];
 		assert(victim <= mpi_data.nTotalProc_ && "stealrandom");
-		SendRequest(mpi_data, victim, -1);
+		SendRequest(victim, -1);
 		treesearch_data->stealer_->SetRequesting();
 		DBG(
 				D(2) << "Steal Random:" << "\trequesting="
@@ -236,7 +234,7 @@ void ParallelDFS::Steal(MPI_Data& mpi_data) {
 			mpi_data.lifelines_activated_[lifeline] = true;
 			// becomes false only at RecvGive
 			assert(lifeline <= mpi_data.nTotalProc_ && "lifeline");
-			SendRequest(mpi_data, lifeline, 1);
+			SendRequest(lifeline, 1);
 			DBG(
 					D(2) << "Steal Lifeline:" << "\trequesting="
 							<< treesearch_data->stealer_->Requesting()
@@ -278,9 +276,8 @@ void ParallelDFS::Steal(MPI_Data& mpi_data) {
  * This function should be called if all the subclass ProbeExecute failed.
  *
  */
-void ParallelDFS::ProbeExecute(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data, MPI_Status* probe_status,
-		int probe_src, int probe_tag) {
+void ParallelDFS::ProbeExecute(TreeSearchData* treesearch_data,
+		MPI_Status* probe_status, int probe_src, int probe_tag) {
 //	if (ParallelSearch::ProbeExecute(mpi_data, XX)) {
 //		return true;
 //	}
@@ -288,24 +285,24 @@ void ParallelDFS::ProbeExecute(MPI_Data& mpi_data,
 	switch (probe_tag) {
 // control tasks
 	case Tag::DTD_REQUEST:
-		RecvDTDRequest(mpi_data, treesearch_data, probe_src);
+		RecvDTDRequest(treesearch_data, probe_src);
 		break;
 	case Tag::DTD_REPLY:
-		RecvDTDReply(mpi_data, treesearch_data, probe_src);
+		RecvDTDReply(treesearch_data, probe_src);
 		break;
 	case Tag::BCAST_FINISH:
-		RecvBcastFinish(mpi_data, probe_src);
+		RecvBcastFinish(probe_src);
 		break;
 
 // basic tasks
 	case Tag::REQUEST:
-		RecvRequest(mpi_data, treesearch_data, probe_src);
+		RecvRequest(treesearch_data, probe_src);
 		break;
 	case Tag::REJECT:
-		RecvReject(mpi_data, probe_src);
+		RecvReject(probe_src);
 		break;
 	case Tag::GIVE:
-		RecvGive(mpi_data, treesearch_data, probe_src, *probe_status);
+		RecvGive(treesearch_data, probe_src, *probe_status);
 		break;
 
 	default:
@@ -322,9 +319,10 @@ void ParallelDFS::ProbeExecute(MPI_Data& mpi_data,
 }
 
 //==============================================================================
-bool ParallelDFS::AccumCountReady(MPI_Data& mpi_data) const {
+bool ParallelDFS::AccumCountReady() const {
 	for (int i = 0; i < k_echo_tree_branch; i++)
-		if (mpi_data.bcast_targets_[i] >= 0 && !(mpi_data.accum_flag_[i]))
+		if (mpi_data.bcast_targets_[i] >= 0
+				&& !(mpi_data.accum_flag_[i]))
 			return false;
 	return true;
 // check only valid bcast_targets_
@@ -332,7 +330,7 @@ bool ParallelDFS::AccumCountReady(MPI_Data& mpi_data) const {
 }
 
 // call this from root rank to start DTD
-void ParallelDFS::SendDTDRequest(MPI_Data& mpi_data) {
+void ParallelDFS::SendDTDRequest() {
 	int message[1];
 	message[0] = 1; // dummy
 
@@ -354,8 +352,8 @@ void ParallelDFS::SendDTDRequest(MPI_Data& mpi_data) {
 	}
 }
 
-void ParallelDFS::RecvDTDRequest(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data, int src) {
+void ParallelDFS::RecvDTDRequest(TreeSearchData* treesearch_data,
+		int src) {
 	DBG(
 			D(3) << "RecvDTDRequest: src=" << src << "\ttimezone="
 					<< mpi_data.dtd_->time_zone_ << std::endl
@@ -365,13 +363,13 @@ void ParallelDFS::RecvDTDRequest(MPI_Data& mpi_data,
 	CallRecv(&message, 1, MPI_INT, src, Tag::DTD_REQUEST,
 			&recv_status);
 
-	if (IsLeafInTopology(mpi_data))
-		SendDTDReply(mpi_data, treesearch_data);
+	if (IsLeafInTopology())
+		SendDTDReply(treesearch_data);
 	else
-		SendDTDRequest(mpi_data);
+		SendDTDRequest();
 }
 
-bool ParallelDFS::DTDReplyReady(MPI_Data& mpi_data) const {
+bool ParallelDFS::DTDReplyReady() const {
 	for (int i = 0; i < k_echo_tree_branch; i++)
 		if (mpi_data.bcast_targets_[i] >= 0
 				&& !(mpi_data.dtd_->accum_flag_[i]))
@@ -381,8 +379,7 @@ bool ParallelDFS::DTDReplyReady(MPI_Data& mpi_data) const {
 // always true if leaf
 }
 
-void ParallelDFS::SendDTDReply(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data) {
+void ParallelDFS::SendDTDReply(TreeSearchData* treesearch_data) {
 	int message[3];
 // using reduced vars
 	message[0] = mpi_data.dtd_->count_ + mpi_data.dtd_->reduce_count_;
@@ -427,8 +424,8 @@ bool ParallelDFS::HasJobToDo() {
 
 }
 
-void ParallelDFS::RecvDTDReply(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data, int src) {
+void ParallelDFS::RecvDTDReply(TreeSearchData* treesearch_data,
+		int src) {
 	MPI_Status recv_status;
 	int message[3];
 	CallRecv(&message, 3, MPI_INT, src, Tag::DTD_REPLY, &recv_status);
@@ -458,16 +455,16 @@ void ParallelDFS::RecvDTDReply(MPI_Data& mpi_data,
 	}
 	assert(flag);
 
-	if (DTDReplyReady(mpi_data)) {
+	if (DTDReplyReady()) {
 		if (mpi_data.mpiRank_ == 0) {
-			DTDCheck(mpi_data); // at root
+			DTDCheck(); // at root
 			log_->d_.dtd_phase_num_++;
 		} else
-			SendDTDReply(mpi_data, treesearch_data);
+			SendDTDReply(treesearch_data);
 	}
 }
 
-void ParallelDFS::DTDCheck(MPI_Data& mpi_data) {
+void ParallelDFS::DTDCheck() {
 	assert(mpi_data.mpiRank_ == 0);
 	// (count, time_warp, not_empty)
 	mpi_data.dtd_->Reduce(mpi_data.dtd_->count_,
@@ -477,7 +474,7 @@ void ParallelDFS::DTDCheck(MPI_Data& mpi_data) {
 			&& mpi_data.dtd_->reduce_time_warp_ == false
 			&& mpi_data.dtd_->reduce_not_empty_ == false) {
 // termination
-		SendBcastFinish(mpi_data);
+		SendBcastFinish();
 		mpi_data.dtd_->terminated_ = true;
 		DBG(D(1) << "terminated" << std::endl
 		; );
@@ -492,7 +489,7 @@ void ParallelDFS::DTDCheck(MPI_Data& mpi_data) {
 	mpi_data.dtd_->ClearReduceVars();
 }
 
-void ParallelDFS::SendBcastFinish(MPI_Data& mpi_data) {
+void ParallelDFS::SendBcastFinish() {
 	DBG(D(2) << "SendBcastFinish" << std::endl
 	; );
 	int message[1];
@@ -509,7 +506,7 @@ void ParallelDFS::SendBcastFinish(MPI_Data& mpi_data) {
 	}
 }
 
-void ParallelDFS::RecvBcastFinish(MPI_Data& mpi_data, int src) {
+void ParallelDFS::RecvBcastFinish(int src) {
 	DBG(D(2) << "RecvBcastFinish: src=" << src << std::endl
 	; );
 	MPI_Status recv_status;
@@ -517,7 +514,7 @@ void ParallelDFS::RecvBcastFinish(MPI_Data& mpi_data, int src) {
 	CallRecv(&message, 1, MPI_INT, src, Tag::BCAST_FINISH,
 			&recv_status);
 
-	SendBcastFinish(mpi_data);
+	SendBcastFinish();
 	mpi_data.dtd_->terminated_ = true;
 	DBG(D(2) << "terminated" << std::endl
 	; );
@@ -526,8 +523,7 @@ void ParallelDFS::RecvBcastFinish(MPI_Data& mpi_data, int src) {
 }
 
 // lifeline == -1 for random thieves
-void ParallelDFS::SendRequest(MPI_Data& mpi_data, int dst,
-		int is_lifeline) {
+void ParallelDFS::SendRequest(int dst, int is_lifeline) {
 	assert(dst >= 0);
 	int message[2];
 	message[0] = mpi_data.dtd_->time_zone_;
@@ -544,8 +540,8 @@ void ParallelDFS::SendRequest(MPI_Data& mpi_data, int dst,
 			; );
 }
 
-void ParallelDFS::RecvRequest(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data, int src) {
+void ParallelDFS::RecvRequest(TreeSearchData* treesearch_data,
+		int src) {
 	DBG(D(2) << "RecvRequest: src=" << src
 	; );
 	MPI_Status recv_status;
@@ -571,9 +567,9 @@ void ParallelDFS::RecvRequest(MPI_Data& mpi_data,
 		; );
 		if (is_lifeline >= 0) {
 			mpi_data.lifeline_thieves_->Push(thief);
-			SendReject(mpi_data, thief); // notify
+			SendReject(thief); // notify
 		} else {
-			SendReject(mpi_data, thief); // notify
+			SendReject(thief); // notify
 		}
 	} else {
 		DBG(D(2, false) << "\tpush" << std::endl
@@ -586,7 +582,7 @@ void ParallelDFS::RecvRequest(MPI_Data& mpi_data,
 	// todo: take log
 }
 
-void ParallelDFS::SendReject(MPI_Data& mpi_data, int dst) {
+void ParallelDFS::SendReject(int dst) {
 	assert(dst >= 0);
 	int message[1];
 
@@ -601,7 +597,7 @@ void ParallelDFS::SendReject(MPI_Data& mpi_data, int dst) {
 			; );
 }
 
-void ParallelDFS::RecvReject(MPI_Data& mpi_data, int src) {
+void ParallelDFS::RecvReject(int src) {
 	MPI_Status recv_status;
 	int message[1];
 
@@ -620,8 +616,8 @@ void ParallelDFS::RecvReject(MPI_Data& mpi_data, int src) {
 	mpi_data.waiting_ = false;
 }
 
-void ParallelDFS::SendGive(MPI_Data& mpi_data,
-		VariableLengthItemsetStack * st, int dst, int is_lifeline) {
+void ParallelDFS::SendGive(VariableLengthItemsetStack * st, int dst,
+		int is_lifeline) {
 	assert(dst >= 0);
 	st->SetTimestamp(mpi_data.dtd_->time_zone_);
 	st->SetFlag(is_lifeline);
@@ -653,8 +649,7 @@ void ParallelDFS::SendGive(MPI_Data& mpi_data,
 	//st->PrintAll(D(false));
 }
 
-void ParallelDFS::RecvGive(MPI_Data& mpi_data,
-		TreeSearchData* treesearch_data, int src,
+void ParallelDFS::RecvGive(TreeSearchData* treesearch_data, int src,
 		MPI_Status probe_status) {
 	int count;
 	int error = MPI_Get_count(&probe_status, MPI_INT, &count);
@@ -728,7 +723,7 @@ void ParallelDFS::RecvGive(MPI_Data& mpi_data,
 
 //==============================================================================
 
-bool ParallelDFS::IsLeafInTopology(MPI_Data& mpi_data) const {
+bool ParallelDFS::IsLeafInTopology() const {
 	for (int i = 0; i < k_echo_tree_branch; i++)
 		if (mpi_data.bcast_targets_[i] >= 0)
 			return false;
@@ -747,7 +742,7 @@ int ParallelDFS::CallIprobe(MPI_Status * status, int * src,
 
 	int flag;
 	int error = MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG,
-			MPI_COMM_WORLD, &flag, status);
+	MPI_COMM_WORLD, &flag, status);
 	if (error != MPI_SUCCESS) {
 		DBG(D(1) << "error in MPI_Iprobe: " << error << std::endl
 		; );
@@ -827,7 +822,7 @@ int ParallelDFS::CallBcast(void * buffer, int data_count,
 	start_time = timer_->Elapsed();
 
 	int error = MPI_Bcast(buffer, data_count, type, 0,
-			MPI_COMM_WORLD);
+	MPI_COMM_WORLD);
 
 	end_time = timer_->Elapsed();
 	log_->d_.bcast_time_ += end_time - start_time;
