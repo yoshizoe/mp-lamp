@@ -90,15 +90,17 @@ or for parallel build (for 4 threads)
 $ scons -j 4
 ```
 
-Parallel binary *mp_lamp* will be ready.
+Parallel binary *cont_lamp* will be ready.
+If you want to build LAMP for binary features not continuous features, rewrite the sconscript at ./mp-main to build bin_lamp. (TO FIX)
 Note: to run the parallel version, please use `mpiexec`
 as shown in the following example.
 	
 ## Usage
 
-* *mp-lamp* could be used from command line.
+* *cont-lamp* can be used from command line.
+
 For 32 processes,
-$ mpiexec -hostfile ${machinefile} -np 32 ./mp-lamp --item item_file.csv --pos positive_file.csv --a 0.05 --show_progress --log
+$ mpiexec -hostfile ${machinefile} -np 32 ./cont-lamp --item item_file.csv --pos positive_file.csv --a 0.05 --show_progress --log
 	* --item: item data file
 	* -pos: positive data file
 	* --a: significance level (default 0.05)
@@ -215,4 +217,4 @@ MP-LAMP is an open source code project licensed under the Revised BSD license.
 ## Author
 
 Kazuki Yoshizoe implemented MP-LAMP for binary features.
-Yuu Jinnai modified the code to implement continuous features.
+Yuu Jinnai modified the code to support dataset with continuous features.
