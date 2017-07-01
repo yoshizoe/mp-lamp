@@ -2,9 +2,27 @@
 
 # TODO: Run parallel jobs.
 
+simple () {
+    samples=200
+    features=50
+    r0=0.5
+    np=2
+    instance="synth_${samples}_${features}_${r0}"
+    method="jinnai-0.95"
+    RESULT=../results/$instance.${method}.np$np.a5.stat
+    echo "qsub -pe orte $np -v inst=\"$instance\",method=\"${method}\",np=\"$np\" -e \"../results/$instance.${method}.np$np.a5.e\" -o \"$RESULT\"  run.sh"
+    if [ -f $RESULT ]
+       rm $RESULT
+    fi
+    qsub -pe orte $np -v instance="$instance",method="${method}",np="$np" -e "../results/$instance.${method}.np$np.a5.e" -o "$RESULT"  run.sh
+}
+simple
+exit
+
+
 testsummary () {
     vsamples=200
-    vfeatures="10 50 100"
+    vfeatures="50 100"
     rs="0.5"
     jids=""
     results=""
@@ -40,17 +58,3 @@ testsummary () {
 #exit
 
 
-simple () {
-    samples=100
-    features=20
-    r0=0.5
-    np=8
-    instance="synth_${samples}_${features}_${r0}"
-    method="jinnai-0.95"
-    RESULT=../results/$instance.${method}.np$np.a5.stat
-    echo "qsub -pe $np -v inst=\"$instance\",method=\"${method}\",np=\"$np\" -e \"../results/$instance.${method}.np$np.a5.e\" -o \"$RESULT\"  run.sh"
-    qsub -v instance="$instance",method="${method}",np="$np" -e "../results/$instance.${method}.np$np.a5.e" -o "$RESULT"  run.sh
-#    qsub -pe $np  -e "../results/$instance.${method}.np$np.a5.e" -o "$RESULT"  run.sh
-}
-simple
-exit
