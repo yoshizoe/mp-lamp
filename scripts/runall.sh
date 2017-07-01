@@ -40,13 +40,13 @@ testsummary () {
     qsub -v results="$results",summary="$summary" \
 	-hold_jid $jids summary.sh
 }
-testsummary
-exit
+#testsummary
+#exit
 
 
 simple () {
     samples=200
-    features=100
+    features=50
     r0=0.5
     np=2
     instance="synth_${samples}_${features}_${r0}"
