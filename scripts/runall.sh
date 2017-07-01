@@ -7,15 +7,15 @@ RUN="run-grid.sh"
 testsummary () {
     vsamples=200
     vfeatures="50 100 110 120 130 140 150 160 170 180 190 200"
-    vfeatures="50"
-    rs="0.5"
+#    vfeatures="50"
+    rs="0.5 0.1"
     jids=""
     results=""
     method="jinnai-0.95"
     summary=../results/summary/${method}.a5
 #    nps="4 8 16"
-#    nps="2 4 8 16"
-    nps="2"
+    nps="2 4 8 16"
+#    nps="2"
     for np in $nps
     do
 	for samples in $vsamples
@@ -40,8 +40,8 @@ testsummary () {
     qsub -v results="$results",summary="$summary" \
 	-hold_jid $jids summary.sh
 }
-#testsummary
-#exit
+testsummary
+exit
 
 
 simple () {
