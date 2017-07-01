@@ -2,6 +2,8 @@
 
 # TODO: Run parallel jobs.
 
+RUN="run-raiden.sh"
+
 testsummary () {
     vsamples=200
     vfeatures="10 50 100"
@@ -22,7 +24,7 @@ testsummary () {
 		do
 		    instance="synth_${samples}_${features}_${r0}"
 		    RESULT=../results/$instance.${method}.np$np.a5.stat
-		    id=`qsub -pe impi $np -v instanced=$instance,method=${method},np=$np -e "../results.$instance.${method}.np$np.a5.e" -o "$RESULT"  run.sh | awk '{print $3}'`
+		    id=`qsub -pe impi $np -v instanced=$instance,method=${method},np=$np -e "../results.$instance.${method}.np$np.a5.e" -o "$RESULT"  $RUN | awk '{print $3}'`
 		    jids="$jids,$id"
 		    results="${results} ${RESULT}"
 		done
@@ -49,7 +51,7 @@ simple () {
     method="jinnai-0.95"
     RESULT=../results/$instance.${method}.np$np.a5.stat
     echo "qsub -pe $np -v inst=\"$instance\",method=\"${method}\",np=\"$np\" -e \"../results/$instance.${method}.np$np.a5.e\" -o \"$RESULT\"  run.sh"
-    qsub -v instance="$instance",method="${method}",np="$np" -e "../results/$instance.${method}.np$np.a5.e" -o "$RESULT"  run.sh
+    qsub -v instance="$instance",method="${method}",np="$np" -e "../results/$instance.${method}.np$np.a5.e" -o "$RESULT"  $RUN
 #    qsub -pe $np  -e "../results/$instance.${method}.np$np.a5.e" -o "$RESULT"  run.sh
 }
 simple
