@@ -38,6 +38,8 @@ public:
 	void GetSignificantPatterns(
 			GetContSignificantData* getsignificant_data);
 
+	void GetTopKPatterns(int k);
+
 	double GetThreFreq() const {
 		return thre_freq_;
 	}

@@ -135,6 +135,16 @@ void ParallelContinuousPM::GetSignificantPatterns(
 	}
 }
 
+/**
+ * Find the Patterns with K lowest p-values.
+ */
+void ParallelContinuousPM::GetTopKPatterns(int k) {
+	phase_ = 5;
+	printf("GetTopKPatterns\n");
+	Search();
+}
+
+
 //==============================================================================
 /**
  * Procedure to run after Probe().
@@ -144,12 +154,9 @@ void ParallelContinuousPM::ProcAfterProbe() {
 
 	if (mpi_data.mpiRank_ == 0) {
 		// initiate termination detection
-
-		// TODO: isn't too often to consider calling DTDRequest after every Probe?
 		// note: for phase_ 1, accum request and dtd request are unified
 		if (!mpi_data.echo_waiting_ && !mpi_data.dtd_->terminated_) {
-			if (phase_ == 1) {
-				// TODO: Implement digitalized MinPValueRequest
+			if (phase_ == 1 || phase_ == 5) {
 				if (treesearch_data->node_stack_->Empty()) {
 					if (freq_received) {
 						printf("SendMinPValueRequest because "
@@ -188,15 +195,15 @@ void ParallelContinuousPM::ProbeExecute(
 	 * MINIMALSUPPORT
 	 */
 	case Tag::CONT_REQUEST:
-		assert(phase_ == 1);
+		assert(phase_ == 1 || phase_ == 5);
 		RecvMinPValueRequest( probe_src); // TODO: This can be solved by polymorphism.
 		break;
 	case Tag::CONT_REPLY:
-		assert(phase_ == 1);
+		assert(phase_ == 1 || phase_ == 5);
 		RecvMinPValueReply( probe_src, probe_status);
 		break;
 	case Tag::CONT_LAMBDA:
-		assert(phase_ == 1);
+		assert(phase_ == 1 || phase_ == 5);
 		RecvNewSigLevel(probe_src);
 		break;
 		/**
@@ -248,7 +255,7 @@ void ParallelContinuousPM::ProbeExecute(
 void ParallelContinuousPM::Check() {
 //	printf("Check\n");
 	if (mpi_data.mpiRank_ == 0) {
-		if (phase_ == 1) {
+		if (phase_ == 1 || phase_ == 5) {
 			if (!mpi_data.echo_waiting_) {
 				SendMinPValueRequest();
 			}
@@ -518,7 +525,7 @@ void ParallelContinuousPM::ProcessNode(double freq,
 	closed_set_num_++;
 
 // TODO: For continuous pattern mining calculating p value should be put later?
-	if (phase_ == 1) {
+	if (phase_ == 1 || phase_ == 5) {
 		frequencies.push_back(freq);
 	} else if (phase_ == 4) {
 		int disFreq = GetDiscretizedFrequency(freq);
@@ -738,6 +745,8 @@ void ParallelContinuousPM::RecvMinPValueReply(
 }
 
 void ParallelContinuousPM::CalculateThreshold() {
+	assert(phase_ == 1 || phase_ == 5);
+
 	// TODO: Threshold can be easily pruned by merge sort.
 	printf("CalculateThreshold\n");
 	double prev_thre_freq = thre_freq_;
