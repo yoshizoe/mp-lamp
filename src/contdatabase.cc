@@ -36,7 +36,7 @@ ContDatabase::ContDatabase(std::istream& features,
 
 // read a database file
 void ContDatabase::readFromCSV(istream& ifs, int dim_limit,
-bool reverse) {
+		bool reverse) {
 	std::vector<std::vector<Ftype>> transposed;
 	assert(features.empty());
 	assert(

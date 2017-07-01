@@ -19,6 +19,7 @@ simple () {
 simple
 exit
 
+RUN="run-raiden.sh"
 
 testsummary () {
     vsamples=200
@@ -40,7 +41,7 @@ testsummary () {
 		do
 		    instance="synth_${samples}_${features}_${r0}"
 		    RESULT=../results/$instance.${method}.np$np.a5.stat
-		    id=`qsub -pe impi $np -v instanced=$instance,method=${method},np=$np -e "../results.$instance.${method}.np$np.a5.e" -o "$RESULT"  run.sh | awk '{print $3}'`
+		    id=`qsub -pe impi $np -v instanced=$instance,method=${method},np=$np -e "../results.$instance.${method}.np$np.a5.e" -o "$RESULT"  $RUN | awk '{print $3}'`
 		    jids="$jids,$id"
 		    results="${results} ${RESULT}"
 		done
@@ -56,5 +57,4 @@ testsummary () {
 }
 #testsummary
 #exit
-
 
