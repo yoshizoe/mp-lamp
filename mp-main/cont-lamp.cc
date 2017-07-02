@@ -79,13 +79,16 @@ namespace lamp_search;
 
 int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);
-	printf("CONT-LAMP\n");
 	google::ParseCommandLineFlags(&argc, &argv, true);
 
 	int rank, nu_proc;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &nu_proc);
 
+	if (rank == 0) {
+	  printf("CONT-LAMP: %d\n", nu_proc);
+	}
+	
 	long long int search_start_time, search_end_time;
 
 	{
