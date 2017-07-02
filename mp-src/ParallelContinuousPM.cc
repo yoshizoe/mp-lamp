@@ -1058,7 +1058,7 @@ int ParallelContinuousPM::GetDiscretizedFrequency(double freq) const {
 }
 
 void ParallelContinuousPM::CheckCSThreshold() {
-	printf("CheckCSThreshold\n");
+  //	printf("CheckCSThreshold\n");
 //	assert(mpi_data.mpiRank_ == 0);
 	if (ExceedCsThr()) {
 		printf("Exceeded!\n");
