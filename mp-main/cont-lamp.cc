@@ -97,6 +97,7 @@ int main(int argc, char **argv) {
 		item_file.open(FLAGS_item.c_str(), std::ios::in);
 		std::ifstream class_file;
 		class_file.open(FLAGS_pos.c_str(), std::ios::in);
+
 		ContDatabase* d = new ContDatabase(item_file, class_file);
 		d->ShowInfo();
 //		exit(0);

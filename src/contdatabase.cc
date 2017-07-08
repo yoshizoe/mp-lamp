@@ -29,6 +29,10 @@ ContDatabase::~ContDatabase() {
 ContDatabase::ContDatabase(std::istream& features,
 			   std::istream& classes) :
   nu_transactions_(0), nu_pos_total_(0), nu_items_(0) {
+	if (!features.good() || !classes.good()) {
+		assert(false && "File not found");
+		exit(1);
+	}
 	printf("ContDatabase\n");
 	readFromCSV(features);
 	readClassFromCSV(classes);
