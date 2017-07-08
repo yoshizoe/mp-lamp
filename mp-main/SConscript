@@ -37,6 +37,6 @@ env = env.Clone()
 for prog in Glob('cont-lamp.cc'):
 	env.Program(prog)
 
-for prog in Glob('bin-lamp.cc'):
-	env.Program(prog)
+#for prog in Glob('bin-lamp.cc'):
+#	env.Program(prog)
 

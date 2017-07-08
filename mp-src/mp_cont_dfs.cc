@@ -462,8 +462,10 @@ void MP_CONT_LAMP::Search() {
 		;);
 
 		if (disretizeFreq == 0) {
+			printf("mahito verison\n");
 			psearch->GetMinimalSupport();
 		} else if (disretizeFreq == 1) {
+			printf("jinnai verison\n");
 			psearch->GetDiscretizedMinimalSupport(freqRatio);
 		} else {
 			assert(false && "discretizeFreq=?");
