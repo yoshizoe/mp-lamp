@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
 		d->ShowInfo();
 //		exit(0);
 		int discretize = 0;
-		if (FLAGS_discretize) {
+		if (FLAGS_discretize == 1) {
 			discretize = 1;
 		}
 		printf("discretize = %d\n", discretize);
