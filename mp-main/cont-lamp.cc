@@ -66,7 +66,8 @@ DEFINE_int32(w, 1, "number of random steal attempts");
 DEFINE_int32(m, 2, "number of maximum random steal candidates"); // 1024 is default of x10 GLB
 DEFINE_int32(l, 2, "power of lifeline graph");
 
-DEFINE_bool(discretize, true, "true if we run awesome");
+DEFINE_int32(discretize, 1, "true if we run awesome");
+//DECLARE_bool(discretize); // true, "true discretizes frequency for lamp"
 DEFINE_double(ratio, 0.95, "diminishing ratio of the discretized thresholds");
 
 //
