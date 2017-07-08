@@ -29,6 +29,7 @@ ContDatabase::~ContDatabase() {
 ContDatabase::ContDatabase(std::istream& features,
 			   std::istream& classes) :
   nu_transactions_(0), nu_pos_total_(0), nu_items_(0) {
+	printf("ContDatabase\n");
 	readFromCSV(features);
 	readClassFromCSV(classes);
 //	ShowInfo();

@@ -12,9 +12,9 @@ method="jinnai-0.95"
 
 if [ "1" = "1" ]
 then
-   INSTDIR=./samples/crystal
-   instance=comb200
-   class=material
+   INSTDIR=./samples/cont_data
+   instance=comb10
+   class=$instance
 fi
 
 if [ $method = "mahito" ]
