@@ -66,7 +66,7 @@ DEFINE_int32(w, 1, "number of random steal attempts");
 DEFINE_int32(m, 2, "number of maximum random steal candidates"); // 1024 is default of x10 GLB
 DEFINE_int32(l, 2, "power of lifeline graph");
 
-DEFINE_int32(discretize, 1, "true if we run awesome");
+DEFINE_bool(discretize, 1, "true if we run awesome");
 DEFINE_double(ratio, 0.95, "diminishing ratio of the discretized thresholds");
 
 //
@@ -99,9 +99,13 @@ int main(int argc, char **argv) {
 		ContDatabase* d = new ContDatabase(item_file, class_file);
 		d->ShowInfo();
 //		exit(0);
+		int discretize = 0;
+		if (FLAGS_discretize) {
+			discretize = 1;
+		}
 		MP_CONT_LAMP* search = new MP_CONT_LAMP(d, rank, nu_proc,
 				FLAGS_n, FLAGS_n_is_ms, FLAGS_w, FLAGS_l, FLAGS_m,
-				FLAGS_discretize, FLAGS_ratio);
+				discretize, FLAGS_ratio);
 
 		search_start_time = Timer::GetInstance()->Elapsed();
 		search->Search();
