@@ -103,6 +103,7 @@ int main(int argc, char **argv) {
 		if (FLAGS_discretize) {
 			discretize = 1;
 		}
+		printf("discretize = %d\n", discretize);
 		MP_CONT_LAMP* search = new MP_CONT_LAMP(d, rank, nu_proc,
 				FLAGS_n, FLAGS_n_is_ms, FLAGS_w, FLAGS_l, FLAGS_m,
 				discretize, FLAGS_ratio);
