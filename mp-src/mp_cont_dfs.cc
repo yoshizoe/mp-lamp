@@ -468,6 +468,7 @@ void MP_CONT_LAMP::Search() {
 			printf("jinnai verison\n");
 			psearch->GetDiscretizedMinimalSupport(freqRatio);
 		} else {
+			printf("discretizeFreq == %d\n", disretizeFreq);
 			assert(false && "discretizeFreq=?");
 		}
 //		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
