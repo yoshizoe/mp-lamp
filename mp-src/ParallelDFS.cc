@@ -337,6 +337,7 @@ void ParallelDFS::SendDTDRequest() {
 	mpi_data.echo_waiting_ = true;
 
 	for (int i = 0; i < k_echo_tree_branch; i++) {
+//		printf("bcast_targets[%d] = %d\n", i, mpi_data.bcast_targets_[i]);
 		if (mpi_data.bcast_targets_[i] < 0)
 			break;
 		assert(
@@ -345,7 +346,7 @@ void ParallelDFS::SendDTDRequest() {
 		CallBsend(message, 1, MPI_INT, mpi_data.bcast_targets_[i],
 				Tag::DTD_REQUEST);
 		DBG(
-				D(3) << "SendDTDRequest: dst="
+				D(1) << "SendDTDRequest: dst="
 						<< mpi_data.bcast_targets_[i] << "\ttimezone="
 						<< mpi_data.dtd_->time_zone_ << std::endl
 				; );

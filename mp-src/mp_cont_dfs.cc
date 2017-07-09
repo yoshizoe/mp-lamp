@@ -474,7 +474,11 @@ void MP_CONT_LAMP::Search() {
 //		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
 		thre_freq_ = psearch->GetThreFreq();
 		thre_pmin_ = psearch->GetThrePmin();
-		n_testable = psearch->NumberOfTestablePatterns();
+		if (disretizeFreq == 1) {
+			n_testable = psearch->NumberOfTestablePatterns();
+		} else {
+			n_testable = 0;
+		}
 
 		MPI_Barrier( MPI_COMM_WORLD);
 		// todo: reduce expand_num_
@@ -642,8 +646,11 @@ void MP_CONT_LAMP::Search() {
 			FLAGS_sig_max);
 // significant_stack_ = new VariableLengthItemsetStack(FLAGS_sig_max, lambda_max_);
 
-	final_sig_level_ = FLAGS_a / n_testable;
-//	final_sig_level_ = psearch->GetThrePmin();
+	if (disretizeFreq) {
+		final_sig_level_ = FLAGS_a / n_testable;
+	} else {
+		final_sig_level_ = psearch->GetThrePmin();
+	}
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
 // TODO: ?

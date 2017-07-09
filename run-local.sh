@@ -8,9 +8,9 @@ INSTDIR=./samples/cont_data
 instance=synth_50_10
 class=synth_50_10
 method="mahito"
-method="jinnai-0.95"
+#method="jinnai-0.95"
 
-if [ "1" = "1" ]
+if [ "1" = "0" ]
 then
    INSTDIR=./samples/cont_data
    instance=comb10
