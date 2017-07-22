@@ -120,7 +120,7 @@ void ParallelContinuousPM::GetTestablePatterns(
 }
 
 void ParallelContinuousPM::GetSignificantPatterns(
-		GetContSignificantData* getsignificant_data) {
+		GetContSignificantData* getsignificant_data, int topk) {
 	this->getsignificant_data = getsignificant_data;
 	DBG(D(1) << "MainLoop" << std::endl
 	;);

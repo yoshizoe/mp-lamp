@@ -65,7 +65,7 @@ public:
 	 * l: power of lifeline graph
 	 */
 	MP_CONT_LAMP(ContDatabase* d, int rank, int nu_proc, int n,
-			bool n_is_ms, int w, int l, int m, int disretizeFreq = 0, double freqRatio = 0.95);
+			bool n_is_ms, int w, int l, int m, int disretizeFreq = 0, double freqRatio = 0.95, int topk = 0);
 
 	~MP_CONT_LAMP();
 
@@ -114,6 +114,8 @@ private:
 
 	int disretizeFreq;
 	double freqRatio;
+
+	int topk;
 
 	Log log_;
 	Timer * timer_;

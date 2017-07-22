@@ -36,7 +36,7 @@ public:
 //	void PreProcessRootNode(GetMinSupData* getminsup_data);
 	void GetTestablePatterns(GetTestableData* gettestable_data);
 	void GetSignificantPatterns(
-			GetContSignificantData* getsignificant_data);
+			GetContSignificantData* getsignificant_data, int topk = 0);
 
 	void GetTopKPvalue(int k);
 	void SearchSignificantPatterns(double pvalue);
