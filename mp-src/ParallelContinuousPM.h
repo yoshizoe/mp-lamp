@@ -36,9 +36,10 @@ public:
 //	void PreProcessRootNode(GetMinSupData* getminsup_data);
 	void GetTestablePatterns(GetTestableData* gettestable_data);
 	void GetSignificantPatterns(
-			GetContSignificantData* getsignificant_data, int topk = 0);
+			GetContSignificantData* getsignificant_data,
+			int topk = 0);
 
-	void GetTopKPvalue(int k);
+	void GetTopKPvalue(int k, double freqRatio);
 	void SearchSignificantPatterns(double pvalue);
 
 	double GetThreFreq() const {
@@ -80,16 +81,14 @@ protected:
 	 *
 	 */
 //	bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	virtual void ProbeExecute(
-			TreeSearchData* treesearch_data, MPI_Status* probe_status,
-			int probe_src, int probe_tag);
+	virtual void ProbeExecute(TreeSearchData* treesearch_data,
+			MPI_Status* probe_status, int probe_src, int probe_tag);
 //	bool ProbeExecuteMINSUP(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 //			MPI_Status& probe_status, int probe_src, int probe_tag);
 
 	void ProcAfterProbe(); // DOMAINDEPENDENT
 	void Check(); // DOMAINDEPENDENT
-	bool ExpandNode(
-			TreeSearchData*treesearch_data);
+	bool ExpandNode(TreeSearchData*treesearch_data);
 	std::vector<int> GetChildren(std::vector<int> items); // DOMAINDEPENDENT
 	bool PopNodeFromStack();
 	bool TestAndPushNode(int new_item);
@@ -113,8 +112,7 @@ protected:
 	void RecvMinPValueRequest(int src);
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendMinPValueReply();
-	void RecvMinPValueReply(int src,
-			MPI_Status* probe_status);
+	void RecvMinPValueReply(int src, MPI_Status* probe_status);
 	void CalculateThreshold();
 	void SendNewSigLevel(double sig_level);
 	void RecvNewSigLevel(int src);
@@ -137,8 +135,7 @@ protected:
 	void SendResultRequest();
 	void RecvResultRequest(int src);
 	void SendResultReply();
-	void RecvResultReply(int src,
-			MPI_Status status);
+	void RecvResultReply(int src, MPI_Status status);
 //	bool AccumCountReady(MPI_Data& mpi_data) const;
 	void ExtractSignificantSet();
 
@@ -152,7 +149,7 @@ protected:
 	 *
 	 */
 	std::vector<std::pair<double, double>> InitializeThresholdTable(
-			 double ratio, int size, double alpha);
+			double ratio, int size, double alpha);
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendDTDAccumRequest();
 	void RecvDTDAccumRequest(int src);

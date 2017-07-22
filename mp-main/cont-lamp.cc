@@ -66,6 +66,8 @@ DEFINE_int32(w, 1, "number of random steal attempts");
 DEFINE_int32(m, 2, "number of maximum random steal candidates"); // 1024 is default of x10 GLB
 DEFINE_int32(l, 2, "power of lifeline graph");
 
+DEFINE_int32(mptopk, 0, "Enumerate topk patterns. Enumerate all significant patterns if 0.");
+
 DEFINE_int32(discretize, 1, "true if we run awesome");
 //DECLARE_bool(discretize); // true, "true discretizes frequency for lamp"
 DEFINE_double(ratio, 0.95, "diminishing ratio of the discretized thresholds");
@@ -108,7 +110,7 @@ int main(int argc, char **argv) {
 		printf("discretize = %d\n", discretize);
 		MP_CONT_LAMP* search = new MP_CONT_LAMP(d, rank, nu_proc,
 				FLAGS_n, FLAGS_n_is_ms, FLAGS_w, FLAGS_l, FLAGS_m,
-				discretize, FLAGS_ratio);
+				discretize, FLAGS_ratio, FLAGS_mptopk);
 
 		search_start_time = Timer::GetInstance()->Elapsed();
 		search->Search();

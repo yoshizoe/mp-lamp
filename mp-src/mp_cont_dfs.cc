@@ -366,7 +366,7 @@ void MP_CONT_LAMP::ClearTasks() {
 
 	while (true) {
 		error = MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG,
-		MPI_COMM_WORLD, &flag, &probe_status);
+				MPI_COMM_WORLD, &flag, &probe_status);
 		if (error != MPI_SUCCESS) {
 			DBG(
 					D(1) << "error in MPI_Iprobe in ClearTasks: "
@@ -392,8 +392,7 @@ void MP_CONT_LAMP::ClearTasks() {
 		tag = probe_status.MPI_TAG;
 
 		error = MPI_Recv(give_stack_->Stack(), data_count, MPI_INT,
-				src, tag,
-				MPI_COMM_WORLD, &recv_status);
+				src, tag, MPI_COMM_WORLD, &recv_status);
 		if (error != MPI_SUCCESS) {
 			DBG(
 					D(1) << "error in MPI_Recv in ClearTasks: "
@@ -461,7 +460,10 @@ void MP_CONT_LAMP::Search() {
 		DBG(D(2) << "---------------" << std::endl
 		;);
 
-		if (disretizeFreq == 0) {
+		if (topk > 0) {
+			printf("TopK pvalue version (K = %d)\n", topk);
+			psearch->GetTopKPvalue(topk, freqRatio);
+		} else if (disretizeFreq == 0) {
 			printf("mahito verison\n");
 			psearch->GetMinimalSupport();
 		} else if (disretizeFreq == 1) {
@@ -471,6 +473,7 @@ void MP_CONT_LAMP::Search() {
 			printf("discretizeFreq == %d\n", disretizeFreq);
 			assert(false && "discretizeFreq=?");
 		}
+
 //		GetMinimalSupport(mpi_data_, treesearch_data_, getminsup_data_);
 		thre_freq_ = psearch->GetThreFreq();
 		thre_pmin_ = psearch->GetThrePmin();
@@ -480,7 +483,7 @@ void MP_CONT_LAMP::Search() {
 			n_testable = 0;
 		}
 
-		MPI_Barrier( MPI_COMM_WORLD);
+		MPI_Barrier (MPI_COMM_WORLD);
 		// todo: reduce expand_num_
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
 			std::cout << "# " << "1st phase end: " << "thre_freq_= "
@@ -590,8 +593,7 @@ void MP_CONT_LAMP::Search() {
 
 	long long int closed_set_num_reduced;
 	MPI_Reduce(&closed_set_num_, &closed_set_num_reduced, 1,
-	MPI_LONG_LONG_INT,
-	MPI_SUM, 0, MPI_COMM_WORLD); // error?
+			MPI_LONG_LONG_INT, MPI_SUM, 0, MPI_COMM_WORLD); // error?
 
 	DBG(
 			if (mpi_data_.mpiRank_ == 0)
@@ -606,7 +608,7 @@ void MP_CONT_LAMP::Search() {
 					/ ((timer_->Elapsed() - log_.d_.search_start_time_)
 							/ GIGA);
 
-	MPI_Barrier( MPI_COMM_WORLD);
+	MPI_Barrier (MPI_COMM_WORLD);
 	log_.FinishPeriodicLog();
 
 	{
@@ -652,9 +654,9 @@ void MP_CONT_LAMP::Search() {
 		final_sig_level_ = psearch->GetThrePmin();
 	}
 
-	if (topk > 0) {
-		final_sig_level_ = 1.0;
-	}
+//	if (topk > 0) {
+//		final_sig_level_ = 1.0;
+//	}
 
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
@@ -683,7 +685,7 @@ void MP_CONT_LAMP::Search() {
 		SortSignificantSets();
 
 	log_.d_.search_finish_time_ = timer_->Elapsed();
-	MPI_Barrier( MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	{
 		if (mpi_data_.mpiRank_ == 0 && FLAGS_show_progress) {
@@ -750,10 +752,13 @@ void MP_CONT_LAMP::SortSignificantSets() {
 	printf("%d significant sets\n", significant_set_.size());
 	// TODO: remove itemset not in Top-K in the while loop.
 	// it is inefficient to reduce the size after putting in everything in.
-	if (topk > 0 && significant_set_.size() > k) {
-		significant_set_.erase(significant_set_.begin() + k, significant_set_.end());
+	if (topk > 0 && significant_set_.size() > topk) {
+		significant_set_.erase(
+				std::next(significant_set_.begin(), topk),
+				significant_set_.end());
 	}
-	printf("Shrinked the set to Top-K %d significant sets\n", significant_set_.size());
+	printf("Shrinked the set to Top-K %d significant sets\n",
+			significant_set_.size());
 }
 
 // TODO: Ideally, this should also be hidden in other class.
@@ -765,7 +770,7 @@ int MP_CONT_LAMP::CallBcast(void * buffer, int data_count,
 	start_time = timer_->Elapsed();
 
 	int error = MPI_Bcast(buffer, data_count, type, 0,
-	MPI_COMM_WORLD);
+			MPI_COMM_WORLD);
 
 	end_time = timer_->Elapsed();
 	log_.d_.bcast_time_ += end_time - start_time;
