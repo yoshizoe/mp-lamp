@@ -36,9 +36,10 @@ public:
 //	void PreProcessRootNode(GetMinSupData* getminsup_data);
 	void GetTestablePatterns(GetTestableData* gettestable_data);
 	void GetSignificantPatterns(
-			GetContSignificantData* getsignificant_data);
+			GetContSignificantData* getsignificant_data, int topk = 0);
 
-	void GetTopKPatterns(int k);
+	void GetTopKPvalue(int k);
+	void SearchSignificantPatterns(double pvalue);
 
 	double GetThreFreq() const {
 		return thre_freq_;
@@ -67,6 +68,9 @@ protected:
 	GetMinSupData* getminsup_data;
 	GetTestableData* gettestable_data;
 	GetContSignificantData* getsignificant_data;
+
+	// TODO: TOP-K data members. Pack them if necessary.
+	int topk; // top-k
 
 //	Log* log_;
 //	Timer* timer_;
@@ -120,6 +124,8 @@ protected:
 	double alpha_;
 	double thre_freq_; // Threshold for itemset-set C.
 	double thre_pmin_; // Threshold for itemset-set T (testable pattern)
+
+//	double thre_pvalue_; // Threshold of current Top-K: the largest pvalue to be in Top-K.
 
 //	std::vector<std::pair<double, double>> freq_pmin; // only for rank-0.
 	bool freq_received;

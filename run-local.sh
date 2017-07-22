@@ -10,7 +10,7 @@ class=synth_50_10
 method="mahito"
 #method="jinnai-0.95"
 
-if [ "1" = "0" ]
+if [ "1" = "1" ]
 then
    INSTDIR=./samples/cont_data
    instance=comb10

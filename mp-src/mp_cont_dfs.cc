@@ -96,11 +96,11 @@ const int MP_CONT_LAMP::k_probe_period = 128;
 
 MP_CONT_LAMP::MP_CONT_LAMP(ContDatabase* d, int rank, int nu_proc,
 		int n, bool n_is_ms, int w, int l, int m, int disretizeFreq,
-		double freqRatio) :
+		double freqRatio, int topk) :
 		d_(d), dtd_(k_echo_tree_branch), mpi_data_(
 				FLAGS_bsend_buffer_size, rank, nu_proc, n, n_is_ms, w,
 				l, m, k_echo_tree_branch, &dtd_), disretizeFreq(
-				disretizeFreq), freqRatio(freqRatio), timer_(
+				disretizeFreq), freqRatio(freqRatio), topk(topk), timer_(
 				Timer::GetInstance()), give_stack_(
 		NULL), stealer_(mpi_data_.nRandStealTrials_,
 				mpi_data_.hypercubeDimension_), phase_(0), freq_stack_(
@@ -651,6 +651,11 @@ void MP_CONT_LAMP::Search() {
 	} else {
 		final_sig_level_ = psearch->GetThrePmin();
 	}
+
+	if (topk > 0) {
+		final_sig_level_ = 1.0;
+	}
+
 	CallBcast(&final_sig_level_, 1, MPI_DOUBLE);
 
 // TODO: ?
@@ -666,7 +671,7 @@ void MP_CONT_LAMP::Search() {
 //				&freq_map_, final_sig_level_, significant_stack_,
 //				&significant_set_);
 //		GetSignificantPatterns(mpi_data_, getsignificant_data_);
-		psearch->GetSignificantPatterns(getsignificant_data_);
+		psearch->GetSignificantPatterns(getsignificant_data_, topk);
 		// TODO: put back to global variables.
 	}
 
@@ -676,6 +681,7 @@ void MP_CONT_LAMP::Search() {
 //   or prepare simpler data structure
 	if (mpi_data_.mpiRank_ == 0)
 		SortSignificantSets();
+
 	log_.d_.search_finish_time_ = timer_->Elapsed();
 	MPI_Barrier( MPI_COMM_WORLD);
 
@@ -725,6 +731,7 @@ void MP_CONT_LAMP::SortSignificantSets() {
 			significant_stack_->NuItemset());
 
 	int * set = significant_stack_->FirstItemset();
+
 	while (set != NULL) {
 		// calculate support from set
 		std::vector<int> itemset = significant_stack_->getItems(set);
@@ -739,7 +746,14 @@ void MP_CONT_LAMP::SortSignificantSets() {
 						significant_stack_));
 		set = significant_stack_->NextItemset(set);
 	}
+
 	printf("%d significant sets\n", significant_set_.size());
+	// TODO: remove itemset not in Top-K in the while loop.
+	// it is inefficient to reduce the size after putting in everything in.
+	if (topk > 0 && significant_set_.size() > k) {
+		significant_set_.erase(significant_set_.begin() + k, significant_set_.end());
+	}
+	printf("Shrinked the set to Top-K %d significant sets\n", significant_set_.size());
 }
 
 // TODO: Ideally, this should also be hidden in other class.
