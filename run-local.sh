@@ -2,7 +2,7 @@
 
 # TODO: choose which data to test
 #cd ..
-WDIR=/home/yuu/workspace/mp-lamp
+WDIR=/home/${USER}/workspace/mp-lamp
 INSTDIR=./samples/cont_data
 
 instance=synth_50_10
