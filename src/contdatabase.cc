@@ -319,12 +319,13 @@ double ContDatabase::kl(double total_freq, double pos_freq) const {
 	double r1 = (double) nu_pos_total_ / (double) nu_transactions_;
 	double r0 = (double) (nu_transactions_ - nu_pos_total_)
 			/ (double) nu_transactions_;
+	double neg_freq = total_freq - pos_freq;
+
 	assert(0 <= pos_freq);
 	assert(pos_freq <= total_freq);
 	assert(total_freq <= 1.0);
 	assert(0.0 <= r0 && r0 <= 1.0);
 	assert(0.0 <= r1 && r1 <= 1.0);
-	double neg_freq = total_freq - pos_freq;
 	assert(0 <= neg_freq && neg_freq <= total_freq);
 
 	vector<double> po; // { neg_freq, pos_freq, r0 - neg_freq, r1 - pos_freq };

@@ -1214,6 +1214,13 @@ int ParallelContinuousPM::NextLambdaThr() const {
 		}
 		printf("\n");
 
+		if (getminsup_data->lambda_ == getminsup_data->lambda_max_) {
+			// TODO: this should immediately terminate the search as
+			// there is no more improvement on the threshold.
+			// Or, we can generate a new table.
+			return getminsup_data->lambda_;
+		}
+
 		for (int si = getminsup_data->lambda_max_ - 1;
 				si >= getminsup_data->lambda_; si--) {
 			if (getminsup_data->accum_array_[si] >= topk) {
