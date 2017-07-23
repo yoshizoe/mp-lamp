@@ -252,7 +252,7 @@ double ContDatabase::CalculatePValue(std::vector<int>& itemset_items) const {
 // Sugiyama's code
 // compute p-value
 double ContDatabase::computePvalue(double kl, int N) const {
-	assert(0 <= kl);
+	assert(-0.0001 <= kl);
 	assert(0 < N);
 	boost::math::chi_squared chisq_dist(1);
 	// else pval = 1 - boost::math::cdf(chisq_dist, 2 * (double)N * kl);
