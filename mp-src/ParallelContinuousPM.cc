@@ -1331,11 +1331,17 @@ std::vector<std::pair<double, double> > ParallelContinuousPM::InitializeThreshol
 		table[i].second = d_->CalculatePLowerBound(table[i].first);
 	}
 	printf("The domain of discrete Fr(X) = {0..%d}\n", thresholds.size());
-//	for (int i = 0; i < thresholds.size(); ++i) {
+	printf("freq = ");
+	for (int i = 0; i < thresholds.size(); ++i) {
+		printf("%10.8f ", table[i].first);
 //		printf("freq/minp = %.2f/%.6f\n", table[i].first,
 //				table[i].second);
-//	}
-
+	}
+	printf("\npval = ");
+	for (int i = 0; i < thresholds.size(); ++i) {
+		printf("%10.8f ", table[i].second);
+	}
+	printf("\n");
 	return table;
 }
 
