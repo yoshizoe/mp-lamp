@@ -345,7 +345,7 @@ double ContDatabase::kl(double total_freq, double pos_freq) const {
 //		kl = 0.0;
 //	}
 	assert(
-			0.0 <= kl || (fprintf(stderr, "kl=%f, total_freq=%f, pos_freq=%f\n", kl, total_freq, pos_freq) && 0));
+			-0.0001 <= kl || (fprintf(stderr, "kl=%f, total_freq=%f, pos_freq=%f\n", kl, total_freq, pos_freq) && 0));
 	return kl;
 }
 
