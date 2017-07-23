@@ -609,7 +609,7 @@ void ParallelContinuousPM::ProcessNode(double freq, int* ppc_ext_buf) {
 		int* array = treesearch_data->node_stack_->GetItemArray(ppc_ext_buf);
 		std::vector<int> buf(array, array + n);
 		double actual_pvalue = d_->CalculatePValue(buf);
-		printf("pval = %f, pmin = %f\n", actual_pvalue, thre_pmin_);
+//		printf("pval = %f, pmin = %f\n", actual_pvalue, thre_pmin_);
 		if (actual_pvalue < thre_pmin_) {
 			gettestable_data->freq_stack_->PushPre();
 			int * item = gettestable_data->freq_stack_->Top();
