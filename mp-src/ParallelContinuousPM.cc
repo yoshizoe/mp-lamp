@@ -1204,15 +1204,15 @@ bool ParallelContinuousPM::ExceedCsThr() const {
 
 int ParallelContinuousPM::NextLambdaThr() const {
 	assert(phase_ == 4 || phase_ == 5);
-	printf("NextLambdaThr\n");
+//	printf("NextLambdaThr\n");
 
 	if (phase_ == 5) {
-		printf("lambda = %d\n", getminsup_data->lambda_);
-		printf("accum_array =");
-		for (int i = 0; i < getminsup_data->lambda_max_; ++i) {
-			printf(" %d", getminsup_data->accum_array_[i]);
-		}
-		printf("\n");
+//		printf("lambda = %d\n", getminsup_data->lambda_);
+//		printf("accum_array =");
+//		for (int i = 0; i < getminsup_data->lambda_max_; ++i) {
+//			printf(" %d", getminsup_data->accum_array_[i]);
+//		}
+//		printf("\n");
 
 		if (getminsup_data->lambda_ == getminsup_data->lambda_max_) {
 			// TODO: this should immediately terminate the search as
@@ -1256,7 +1256,7 @@ int ParallelContinuousPM::NumberOfTestablePatterns() const {
 }
 
 void ParallelContinuousPM::SendLambda(int lambda) {
-	printf("SendLambda\n");
+//	printf("SendLambda\n");
 // send lambda to bcast_targets_
 	int message[2];
 	message[0] = mpi_data.dtd_->time_zone_;
