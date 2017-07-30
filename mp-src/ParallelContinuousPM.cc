@@ -165,9 +165,10 @@ void ParallelContinuousPM::GetTopKPvalue(int k, double freqRatio) {
 	phase_ = 5;
 	topk = k;
 
+
 	// TODO: How do we select the discretization???
 	// upper limit?
-	thresholds = InitializeThresholdTable(freqRatio, 128, 1.0);
+	thresholds = InitializePvalueTable(freqRatio, 128, d_->NumPosRatio());
 //	printf("thresholds.size() = %d\n", thresholds.size());
 	long long int* dtd_accum_array_base_ = new long long int[thresholds.size()
 			+ 4];
