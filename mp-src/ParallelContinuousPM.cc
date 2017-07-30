@@ -1382,7 +1382,8 @@ std::vector<std::pair<double, double> > ParallelContinuousPM::InitializePvalueTa
 	printf("\n");
 
 	for (int i = 0; i < thresholds.size() - 1; ++i) {
-		assert(table[i].second < table[i+1].second);
+		assert(table[i].first < table[i+1].first);
+		assert(table[i].second > table[i+1].second);
 	}
 
 	return table;
