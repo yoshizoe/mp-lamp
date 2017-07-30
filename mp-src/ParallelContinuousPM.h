@@ -150,6 +150,8 @@ protected:
 	 */
 	std::vector<std::pair<double, double>> InitializeThresholdTable(
 			double ratio, int size, double alpha);
+	std::vector<std::pair<double, double>> InitializePvalueTable(
+			double ratio, int size, double alpha);
 	// 0: count, 1: time warp flag, 2: empty flag, 3--: data
 	void SendDTDAccumRequest();
 	void RecvDTDAccumRequest(int src);

@@ -1345,6 +1345,48 @@ std::vector<std::pair<double, double> > ParallelContinuousPM::InitializeThreshol
 	return table;
 }
 
+std::vector<std::pair<double, double> > ParallelContinuousPM::InitializePvalueTable(
+		double ratio, int size, double r0) {
+	printf("InitializePvalueTable\n");
+	// TODO: the table should be more efficient with inversed.
+	std::vector<double> thresholds;
+	double max_freq = r0;
+	// TODO: Current discretization is way too rough.
+	//       Need to find a way to edit the granularity.
+	for (int i = 0; i < size; ++i) {
+		max_freq = max_freq * ratio; // TODO
+		double pbound = d_->CalculatePLowerBound(max_freq);
+		thresholds.push_back(max_freq);
+	}
+
+	std::sort(thresholds.begin(), thresholds.end());
+
+	std::vector<std::pair<double, double> > table(thresholds.size());
+
+	for (int i = 0; i < thresholds.size(); ++i) {
+		table[i].first = thresholds[i];
+		table[i].second = d_->CalculatePLowerBound(table[i].first);
+	}
+	printf("The domain of discrete Fr(X) = {0..%d}\n", thresholds.size());
+	printf("freq = ");
+	for (int i = 0; i < thresholds.size(); ++i) {
+		printf("%10.8f ", table[i].first);
+//		printf("freq/minp = %.2f/%.6f\n", table[i].first,
+//				table[i].second);
+	}
+	printf("\npval = ");
+	for (int i = 0; i < thresholds.size(); ++i) {
+		printf("%10.8f ", table[i].second);
+	}
+	printf("\n");
+
+	for (int i = 0; i < thresholds.size() - 1; ++i) {
+		assert(table[i].second < table[i+1].second);
+	}
+
+	return table;
+}
+
 /**
  * GETSIGNIFICANT PATTERNS
  *
