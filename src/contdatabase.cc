@@ -11,6 +11,7 @@
 #include <string>
 #include <algorithm>
 #include <sstream>
+#include <numeric>
 #include <boost/math/distributions/chi_squared.hpp>
 using namespace std;
 
