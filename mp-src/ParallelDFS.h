@@ -14,13 +14,17 @@
 
 namespace lamp_search {
 
+	class DFSStack;
+
 /*
  * TODO: Should Extract more fields here.
  */
 class ParallelDFS {
+private:
+    int phase_;
+
 public:
-	ParallelDFS(MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log,
-			Timer* timer, std::ostream& ofs);
+	ParallelDFS(DFSStack* stack, MPI_Data& mpi_data, VariableLengthItemsetStack* give_stack, Log* log,	Timer* timer, std::ostream& ofs);
 	virtual ~ParallelDFS();
 	virtual void Search();
 
@@ -28,10 +32,11 @@ protected:
 	/**
 	 * Parallel Search Basic Methods.
 	 */
-	virtual bool Probe(TreeSearchData* treesearch_data);
-	virtual void ProbeExecute(TreeSearchData* treesearch_data,
-			MPI_Status* probe_status, int probe_src, int probe_tag);
-	virtual void Distribute(TreeSearchData* treesearch_data);
+	virtual bool Probe();
+    virtual void ProbeExecute(MPI_Status* probe_status, int probe_src, int probe_tag);
+//	virtual void ProbeExecute(TreeSearchData* treesearch_data,
+//			MPI_Status* probe_status, int probe_src, int probe_tag);
+	virtual void Distribute();
 	virtual void Give(VariableLengthItemsetStack * st,
 			int steal_num) ;
 	virtual void Reject();
@@ -39,7 +44,11 @@ protected:
 
 	virtual void ProcAfterProbe() = 0;
 	virtual void Check() = 0;
-	virtual bool ExpandNode(TreeSearchData*treesearch_data) = 0;
+
+    void SetPhase(int phase) { phase_ = phase; }
+    int GetPhase() const { return phase_; }
+
+    bool ExpandNode(TreeSearchData*treesearch_data);
 
 	bool AccumCountReady() const;
 	/**
@@ -47,24 +56,20 @@ protected:
 	 */
 	// 0: count, 1: time warp flag, 2: empty flag
 	void SendDTDRequest();
-	void RecvDTDRequest(TreeSearchData* treesearch_data,
-			int src);
+	void RecvDTDRequest(int src);
 
 	bool DTDReplyReady() const;
 	void DTDCheck();
 
 	// 0: count, 1: time warp flag, 2: empty flag
-	void SendDTDReply(TreeSearchData* treesearch_data);
-	void RecvDTDReply(TreeSearchData* treesearch_data,
-			int src);
-	virtual bool HasJobToDo();
+	void SendDTDReply();
+	void RecvDTDReply(int src);
 
 	void SendBcastFinish();
 	void RecvBcastFinish(int src);
 
 	void SendRequest(int dst, int is_lifeline); // for random thieves, is_lifeline = -1
-	void RecvRequest(TreeSearchData* treesearch_data,
-			int src);
+	void RecvRequest(int src);
 
 	// 0: time zone, 1: is_lifeline
 	void SendReject(int dst);
@@ -76,8 +81,7 @@ protected:
 
 	// sets lifelines_activated_ = false
 	// lifelines_activated_ becomes false only in this case (reject does NOT)
-	void RecvGive(TreeSearchData* treesearch_data, int src,
-			MPI_Status status);
+	void RecvGive(int src, MPI_Status status);
 
 	/**
 	 * Network
@@ -97,7 +101,10 @@ protected:
 
 
 	MPI_Data& mpi_data;
-	TreeSearchData* treesearch_data;
+	DFSStack* dfs_stack_;
+    VariableLengthItemsetStack* give_stack_;
+
+//	TreeSearchData* treesearch_data;
 	static const int k_echo_tree_branch;
 
 	/**

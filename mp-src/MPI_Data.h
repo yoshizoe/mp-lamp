@@ -202,7 +202,7 @@ struct MPI_Data {
 
 		bcast_source_ = -1;
 
-		for (std::size_t i = 0; i < k_echo_tree_branch; i++) {
+		for (int i = 0; i < k_echo_tree_branch; i++) {
 			bcast_targets_[i] = -1;
 			accum_flag_[i] = false;
 		}

@@ -43,7 +43,7 @@
 #include "mpi.h"
 
 //#include "../mp-src/ParallelContinuousPM.h"
-#include "timer.h"
+#include "../src/timer.h"
 #include "../mp-src/mp_cont_dfs.h"
 #include "../src/contdatabase.h"
 

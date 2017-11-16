@@ -63,22 +63,14 @@ DECLARE_bool(show_progress);// "show progress at each iteration"
 
 DECLARE_bool(second_phase);// true, "do second phase"
 DECLARE_bool(third_phase);// true, "do third phase"
-
 DECLARE_int32(stack_size);// 1024*1024*64, used as int[stack_size], lamp.cc
-DEFINE_int32(give_size_max, 1024 * 1024 * 4,
-		"maximum size of one give");
+DEFINE_int32(give_size_max, 1024 * 1024 * 4, "maximum size of one give");
 DECLARE_int32(freq_max); // 1024*1024*64, "stack size for holding freq sets", lamp.cc
-DEFINE_int32(sig_max, 1024 * 1024 * 64,
-		"stack size for holding significant sets");
-
-DEFINE_int32(bsend_buffer_size, 1024 * 1024 * 64,
-		"size of bsend buffer");
-
-DEFINE_int32(d, 10,
-		"debug level. 0: none, higher level produce more log");
+DEFINE_int32(sig_max, 1024 * 1024 * 64, "stack size for holding significant sets");
+DEFINE_int32(bsend_buffer_size, 1024 * 1024 * 64, "size of bsend buffer");
+DEFINE_int32(d, 10, "debug level. 0: none, higher level produce more log");
 DEFINE_string(debuglogfile, "d", "base filename for debug log");
 DEFINE_bool(log, false, "show log");
-
 DEFINE_int32(probe_period, 128, "probe period during process node");
 DEFINE_bool(probe_period_is_ms, false,
 		"true: probe period is milli sec, false: num loops");
@@ -410,15 +402,11 @@ void MP_CONT_LAMP::Search() {
 	printf("MP_CONT_LAMP::Search\n");
 
 // TODO: itemset_buf_ is not allocated.
-	TreeSearchData* treesearch_data_ = new TreeSearchData(node_stack_,
-			give_stack_, &stealer_, itemset_buf_, &log_, timer_);
+	TreeSearchData* treesearch_data_ = new TreeSearchData(node_stack_, give_stack_, &stealer_, itemset_buf_, &log_, timer_);
 //	BinaryPatternMiningData* bpm_data_ = new BinaryPatternMiningData(
 //			d_, bsh_, sup_buf_, child_sup_buf_);
-	ContinuousPatternMiningData* cpm_data_ =
-			new ContinuousPatternMiningData(d_);
-	ParallelContinuousPM* psearch = new ParallelContinuousPM(
-			cpm_data_, mpi_data_, treesearch_data_, FLAGS_a, &log_,
-			timer_, lfs_);
+	ContinuousPatternMiningData* cpm_data_ = new ContinuousPatternMiningData(d_);
+	ParallelContinuousPM* psearch = new ParallelContinuousPM(cpm_data_, mpi_data_, treesearch_data_, FLAGS_a, &log_, timer_, lfs_);
 //	GetMinSupData* getminsup_data_;
 	GetTestableData* gettestable_data_;
 	GetContSignificantData* getsignificant_data_;

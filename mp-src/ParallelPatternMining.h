@@ -23,9 +23,7 @@ namespace lamp_search {
  */
 class ParallelPatternMining: public ParallelDFS {
 public:
-	ParallelPatternMining(BinaryPatternMiningData* bpm_data,
-			MPI_Data& mpi_data, TreeSearchData* treesearch_data,
-			Log* log, Timer* timer, std::ostream& ofs);
+	ParallelPatternMining(BinaryPatternMiningData* bpm_data, MPI_Data& mpi_data, TreeSearchData* treesearch_data, Log* log, Timer* timer, std::ostream& ofs);
 	virtual ~ParallelPatternMining();
 
 //	virtual void Search();
@@ -35,36 +33,56 @@ public:
 	void GetSignificantPatterns(
 			GetSignificantData* getsignificant_data);
 
-protected:
+	void CallbackForProbe();
+
+	void UpdateFreqStack(double pval, int* ppc_ext_buf);
+	void IncCsAccum(int sup_num);
+
+    int CalcCoreI(VariableLengthItemsetStack* node_stack, const int* itemset_buf) const;
+    int GetLamba() const;
+    int UpdateChildSupBuf(int new_item, int core_i);
+    bool PPCExtension(VariableLengthItemsetStack* node_stack, const int* itemset_buf, int core_i, int new_item, int* ppc_ext_buf);
+
+private:
 	// TODO: How can we hide the dependency on those low level structures?
 	//       Let's try to understand the semantics of how these methods are used, and factor out.
+	MPI_Data &mpi_data_;
+
 	/*
 	 * Domain graph
 	 */
 	Database<uint64> * d_;
 	LampGraph<uint64> * g_;
 	VariableBitsetHelper<uint64> * bsh_;
-	uint64 * sup_buf_, *child_sup_buf_; // TODO: sup_buf_ is only used in ProcessNode and PreProcessRootNode!
 
-	/*
-	 * Data structure
-	 */
-//	MPI_Data& mpi_data;
-//	TreeSearchData* treesearch_data;
-	GetMinSupData* getminsup_data;
-	GetTestableData* gettestable_data;
-	GetSignificantData* getsignificant_data;
+	// TODO: sup_buf_ is only used in ProcessNode and PreProcessRootNode!
+	uint64* sup_buf_;
+	uint64* child_sup_buf_;
 
 //	Log* log_;
 //	Timer* timer_;
 
+	/*
+     * Data structure
+     */
+	GetMinSupData* getminsup_data_;
+	GetTestableData* gettestable_data_;
+	GetSignificantData* getsignificant_data_;
+
+	int phase_; // 1, 2, 3
+
 	/**
-	 * Methods used for ALL searches: Maybe they should be overrided by other methods.
-	 *
+	 * Statistics
 	 */
+	int expand_num_;
+	int closed_set_num_;
+
+		/**
+         * Methods used for ALL searches: Maybe they should be overrided by other methods.
+         *
+         */
 //	bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
-	virtual void ProbeExecute(TreeSearchData* treesearch_data,
-			MPI_Status* probe_status, int probe_src, int probe_tag);
+	virtual void ProbeExecute(MPI_Status* probe_status, int probe_src, int probe_tag);
 //	bool ProbeExecuteMINSUP(MPI_Data& mpi_data, TreeSearchData* treesearch_data,
 //			MPI_Status& probe_status, int probe_src, int probe_tag);
 
@@ -76,19 +94,12 @@ protected:
 //	void Steal(MPI_Data& mpi_data);
 	void ProcAfterProbe(); // DOMAINDEPENDENT
 	void Check(); // DOMAINDEPENDENT
-	bool ExpandNode(TreeSearchData*treesearch_data);
 	std::vector<int> GetChildren(int core_i); // DOMAINDEPENDENT
-	void PopNodeFromStack();
-	bool TestAndPushNode(int new_item, int core_i);
 	void ProcessNode(int sup_num, int* ppc_ext_buf);
-	void CheckProbe(int& accum_period_counter_,
-			long long int lap_time);
-	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed,
-			long long int start_time);
+	void CheckProbe(int& accum_period_counter_, long long int lap_time);
+	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed, long long int start_time);
 
 	//--------
-
-	int phase_; // 1, 2, 3
 
 	/**
 	 * GetMinSup Functions
@@ -106,7 +117,6 @@ protected:
 	bool ExceedCsThr() const; // getMinSup
 	int NextLambdaThr() const; // getMinSup
 //	int NextLambdaThr(GetMinSupData* getminsup_data) const; // getMinSup
-	void IncCsAccum(int sup_num); // getMinSup
 
 	// TODO: These functions should be factored in Get
 	/**
@@ -121,18 +131,13 @@ protected:
 // insert pointer into significant_map_ (do not sort the stack itself)
 //	void SortSignificantSets();
 
-	/**
+    /**
 	 * Utils
 	 *
 	 */
 	void CheckInit();
 	void CheckInitTestable();
 
-	/**
-	 * Statistics
-	 */
-	int expand_num_;
-	int closed_set_num_;
 };
 
 } /* namespace lamp_search */
