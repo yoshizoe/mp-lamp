@@ -3,7 +3,7 @@
 //
 
 #include <cstdio>
-#include <cassert>
+#include <iostream>
 #include "gflags/gflags.h"
 
 #include "DFSContinuousPMStack.h"
@@ -13,6 +13,11 @@
 namespace lamp_search {
 
     int DFSContinuousPMStack::Process(int phase, Timer* timer, Log* log) {
+
+        if (treesearch_data_->node_stack_->Empty()) {
+            return 0;
+        }
+
         long long int start_time, lap_time;
         start_time = timer->Elapsed();
         lap_time = start_time;
@@ -23,9 +28,7 @@ namespace lamp_search {
             processed++;
             expand_num_++;
 
-            DBG(
-                    D(3) << "Stack has " << treesearch_data_->node_stack_->NuItemset() << " itemsets\\n";
-            );
+            DBG( D(3) << "Stack has " << treesearch_data_->node_stack_->NuItemset() << " itemsets" );
             if (!PopNodeFromStack()) {
                 // Discard a node if pmin(node) > pmin_threshould_.
                 continue;
@@ -53,7 +56,7 @@ namespace lamp_search {
                 // TODO: no need for duplicate detection
                 if (treesearch_data_->node_stack_->Exist(treesearch_data_->itemset_buf_, new_item)) {
                     printf("Node Pruned because of duplicated items");
-                    return false;
+                    return 0;
                 }
                 // skip existing item
                 // todo: improve speed here

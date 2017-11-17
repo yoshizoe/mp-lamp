@@ -234,7 +234,8 @@ void ParallelContinuousPM::ProcAfterProbe() {
 }
 
 void ParallelContinuousPM::ProbeExecute(MPI_Status* probe_status, int probe_src, int probe_tag) {
-	switch (probe_tag) {
+
+    switch (probe_tag) {
 	/**
 	 * MINIMALSUPPORT
 	 */
@@ -308,7 +309,6 @@ void ParallelContinuousPM::Check() {
 		} else {
 		}
 	}
-
 	return;
 }
 
@@ -841,6 +841,7 @@ bool ParallelContinuousPM::UpdateSupBuf(const std::vector<int>& buf) {
         printf("Discarded node as freq = %.4f < %.4f (= thre_freq_)\n", freq, GetThreFreq());
         return false;
     }
+
     return true;
 }
 

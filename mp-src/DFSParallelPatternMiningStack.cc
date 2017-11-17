@@ -4,8 +4,8 @@
 
 #include <gflags/gflags.h>
 #include "DFSParallelPatternMiningStack.h"
-#include "MPI_Data.h";
-#include "ParallelPatternMining.h";
+#include "MPI_Data.h"
+#include "ParallelPatternMining.h"
 
 namespace lamp_search {
 
@@ -164,9 +164,9 @@ namespace lamp_search {
     }
 
     void DFSParallelPatternMiningStack::ProcessNode(int phase, int sup_num, int *ppc_ext_buf) {
-        if (phase == 1)
+        if (phase == 1) {
             IncCsAccum(sup_num); // increment closed_set_num_array
-        if (phase == 2) {
+        } else if (phase == 2) {
             closed_set_num_++;
             if (true) { // XXX: FLAGS_third_phase_
                 int pos_sup_num = bsh_->AndCount(d_->PosNeg(), child_sup_buf_);

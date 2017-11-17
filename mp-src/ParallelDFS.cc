@@ -30,41 +30,32 @@ namespace lamp_search {
 
     ParallelDFS::~ParallelDFS() {
         // TODO Auto-generated destructor stub
-        if (give_stack_) {
-            delete give_stack_;
-        }
     }
 
     void ParallelDFS::Search() {
 
-        DBG(D(1) << "MainLoop" << std::endl;);
+        printf("ParallelDFS::Search\n");
+
+        DBG( D(1) << "MainLoop" << std::endl; );
         while (!mpi_data.dtd_->terminated_) {
             while (!mpi_data.dtd_->terminated_) {
-                if (dfs_stack_->Count() > 0) {
-                    dfs_stack_->Process(phase_, timer_, log_);
+                int processed = dfs_stack_->Process(phase_, timer_, log_);
+                if (processed > 0) {
                     Probe();
-                }
+                    if (mpi_data.dtd_->terminated_) {
+                        break;
+                    }
 
-//			if (ExpandNode(treesearch_data)) {
-//				log_->d_.node_stack_max_itm_ =
-//						std::max(log_->d_.node_stack_max_itm_,
-//								(long long int) (treesearch_data->node_stack_->NuItemset()));
-//				log_->d_.node_stack_max_cap_ =
-//						std::max(log_->d_.node_stack_max_cap_,
-//								(long long int) (treesearch_data->node_stack_->UsedCapacity()));
-//				Probe(treesearch_data);
-//				if (mpi_data.dtd_->terminated_)
-//					break;
-//				Distribute(treesearch_data);
-//				Reject(); // distribute finished, reject remaining requests
-//
-//				Check(); // Implement CheckCSThreshold().
-//
-//			} else
-//				break;
-            }
-            if (mpi_data.dtd_->terminated_) {
-                break;
+                    Distribute();
+                    Reject(); // distribute finished, reject remaining requests
+
+                    Check(); // Implement CheckCSThreshold().
+                } else {
+                    break;
+                }
+                if (mpi_data.dtd_->terminated_) {
+                    break;
+                }
             }
 
             log_->idle_start_ = timer_->Elapsed();
@@ -80,6 +71,7 @@ namespace lamp_search {
                 log_->d_.idle_time_ += timer_->Elapsed() - log_->idle_start_;
                 break;
             }
+
             Check(); // Implement CheckCSThreshold().
 
             log_->d_.idle_time_ += timer_->Elapsed() - log_->idle_start_;
@@ -88,6 +80,7 @@ namespace lamp_search {
 
 //==============================================================================
     bool ParallelDFS::Probe() {
+
         DBG(D(3) << "Probe" << std::endl;);
         MPI_Status probe_status;
         int probe_src, probe_tag;
@@ -100,7 +93,8 @@ namespace lamp_search {
         while (CallIprobe(&probe_status, &probe_src, &probe_tag)) {
             DBG(
                     D(4) << "CallIprobe returned src=" << probe_src
-                         << "\ttag=" << probe_tag << std::endl;);
+                         << "\ttag=" << probe_tag << std::endl;
+            );
             ProbeExecute(&probe_status, probe_src, probe_tag);
 //		ProbeExecute(treesearch_data, &probe_status, probe_src,
 //				probe_tag);
@@ -178,8 +172,10 @@ namespace lamp_search {
 
 // TODO ParallelDFS
     void ParallelDFS::Reject() {
-        if (mpi_data.nTotalProc_ == 1)
+        if (mpi_data.nTotalProc_ == 1) {
             return;
+        }
+
         DBG(D(3) << "Reject" << std::endl;);
         // discard random thieves, move lifeline thieves to lifeline thieves stack
         while (mpi_data.thieves_->Size() > 0) {
@@ -200,9 +196,18 @@ namespace lamp_search {
             return;
         }
 
-        std::pair<int, int> steal_info = dfs_stack_->GetStealInfo();
-        SendRequest(steal_info.first, steal_info.second);
-        dfs_stack_->UpdateStealInfo();
+        try {
+            std::pair<int, int> steal_info = dfs_stack_->GetStealInfo();
+            if (steal_info.second == 1) {
+                dfs_stack_->CheckStealFinish();
+            }
+            if (steal_info.first >= 0) {
+                SendRequest(steal_info.first, steal_info.second);
+                dfs_stack_->UpdateStealInfo();
+            }
+        } catch (const std::exception& e) {
+            DBG( D(3) << "No need to steal" << std::endl; );
+        }
     }
 
 //==============================================================================
@@ -375,6 +380,8 @@ namespace lamp_search {
         }
         assert(flag);
 
+        std::cout << "MPI Rank " << mpi_data.mpiRank_ << std::endl;
+        std::cout << "reduce not empty" << mpi_data.dtd_->reduce_not_empty_ << std::endl;
         if (DTDReplyReady()) {
             if (mpi_data.mpiRank_ == 0) {
                 DTDCheck(); // at root
@@ -390,7 +397,14 @@ namespace lamp_search {
         // (count, time_warp, not_empty)
         mpi_data.dtd_->Reduce(mpi_data.dtd_->count_, mpi_data.dtd_->time_warp_, mpi_data.dtd_->not_empty_);
 
-        if (mpi_data.dtd_->reduce_count_ == 0 && mpi_data.dtd_->reduce_time_warp_ == false && mpi_data.dtd_->reduce_not_empty_ == false) {
+        std::cout << " reduce_count:" << mpi_data.dtd_->reduce_count_
+                << " reduce_time_warp_:" << (mpi_data.dtd_->reduce_time_warp_ ? "true" : "false")
+                << " reduce_not_empty_:" << (mpi_data.dtd_->reduce_not_empty_ ? "true" : "false")
+                << std::endl;
+
+        if (mpi_data.dtd_->reduce_count_ == 0
+            && mpi_data.dtd_->reduce_time_warp_ == false
+            && mpi_data.dtd_->reduce_not_empty_ == false) {
             // termination
             SendBcastFinish();
             mpi_data.dtd_->terminated_ = true;
@@ -613,8 +627,7 @@ namespace lamp_search {
         return true;
     }
 
-    int ParallelDFS::CallIprobe(MPI_Status *status, int *src,
-                                int *tag) {
+    int ParallelDFS::CallIprobe(MPI_Status *status, int *src, int *tag) {
         long long int start_time;
         long long int end_time;
         log_->d_.iprobe_num_++;
@@ -624,23 +637,24 @@ namespace lamp_search {
         LOG(start_time = timer_->Elapsed(););
 
         int flag;
-        int error = MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG,
-                               MPI_COMM_WORLD, &flag, status);
+        int error = MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, status);
         if (error != MPI_SUCCESS) {
             DBG(D(1) << "error in MPI_Iprobe: " << error << std::endl;);
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
         LOG(
-                end_time = timer_->Elapsed();
-                log_->d_.iprobe_time_ += end_time - start_time;
-                log_->d_.iprobe_time_max_ = std::max(end_time - start_time, log_->d_.iprobe_time_max_););
+            end_time = timer_->Elapsed();
+            log_->d_.iprobe_time_ += end_time - start_time;
+            log_->d_.iprobe_time_max_ = std::max(end_time - start_time, log_->d_.iprobe_time_max_);
+        );
 
         if (flag) {
             log_->d_.iprobe_succ_num_++;
             LOG(
-                    log_->d_.iprobe_succ_time_ += end_time - start_time;
-                    log_->d_.iprobe_succ_time_max_ = std::max(end_time - start_time, log_->d_.iprobe_succ_time_max_););
+                log_->d_.iprobe_succ_time_ += end_time - start_time;
+                log_->d_.iprobe_succ_time_max_ = std::max(end_time - start_time, log_->d_.iprobe_succ_time_max_);
+            );
 
             *tag = status->MPI_TAG;
             *src = status->MPI_SOURCE;

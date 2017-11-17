@@ -344,7 +344,7 @@ void MP_LAMP::InitDatabaseRoot(std::istream & is1, std::istream & is2) {
 	sup_buf_ = bsh_->New();
 	child_sup_buf_ = bsh_->New();
 
-	delete pmin_thr_;
+	delete[] pmin_thr_;
 }
 
 void MP_LAMP::InitDatabaseRoot(std::istream & is1, int posnum) {
@@ -412,17 +412,17 @@ void MP_LAMP::InitDatabaseRoot(std::istream & is1, int posnum) {
 	// give_stack_ =  new VariableLengthItemsetStack(FLAGS_give_size_max, lambda_max_);
 	// freq_stack_ = new VariableLengthItemsetStack(FLAGS_freq_max, lambda_max_);
 
-	for (int i = 0; i <= lambda_max_; i++)
+	for (int i = 0; i <= lambda_max_; i++) {
 		pmin_thr_[i] = d_->PMin(i);
+	}
 
 	cs_thr_[0] = 0ll; // should not be used ???
 	for (int i = 1; i <= lambda_max_; i++) {
-		cs_thr_[i] = (long long int) (std::min(
-				std::floor(FLAGS_a / pmin_thr_[i - 1]), (double) (k_cs_max)));
+		cs_thr_[i] = (long long int) (std::min(std::floor(FLAGS_a / pmin_thr_[i - 1]), (double) (k_cs_max)));
 		DBG(
-				D(2) << "cs_thr[" << i << "]=\t" << cs_thr_[i] << "\tpmin_thr="
-						<< pmin_thr_[i - 1] << std::endl
-				;);
+			D(2) << "cs_thr[" << i << "]=\t" << cs_thr_[i] << "\tpmin_thr="
+					<< pmin_thr_[i - 1] << std::endl;
+		);
 	}
 
 	for (int i = 0; i <= lambda_max_; i++)
@@ -431,7 +431,7 @@ void MP_LAMP::InitDatabaseRoot(std::istream & is1, int posnum) {
 	sup_buf_ = bsh_->New();
 	child_sup_buf_ = bsh_->New();
 
-	delete pmin_thr_;
+	delete[] pmin_thr_;
 }
 
 void MP_LAMP::InitDatabaseSub(bool pos) {

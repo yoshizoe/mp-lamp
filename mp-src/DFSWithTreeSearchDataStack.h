@@ -36,6 +36,7 @@ namespace lamp_search {
         virtual void ResetSteal() override;
         virtual bool HasJobToDo() const override;
         virtual void InitSteal() override;
+        virtual void CheckStealFinish() override;
 
         void PrintItemset(int* itembuf) const override;
         void PrintAll(std::ostream& stream) const override;

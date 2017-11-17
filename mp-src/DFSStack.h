@@ -41,6 +41,7 @@ namespace lamp_search {
         virtual void ResetSteal() = 0;
         virtual bool HasJobToDo() const = 0;
         virtual void InitSteal() = 0;
+        virtual void CheckStealFinish() = 0;
 
         virtual void PrintItemset(int* itembuf) const = 0;
         virtual void PrintAll(std::ostream& stream) const = 0;
@@ -53,7 +54,7 @@ namespace lamp_search {
         void CallForProbe();
 
         static std::ofstream null_stream_;
-        std::ostream& D(int level, bool show_phase = true);
+        std::ostream& D(int level, bool show_phase = true) const;
 
     };
 

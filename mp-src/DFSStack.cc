@@ -21,7 +21,7 @@ namespace lamp_search {
         callback_();
     }
 
-    std::ostream& DFSStack::D(int level, bool show_phase) {
+    std::ostream& DFSStack::D(int level, bool show_phase) const {
         bool FLAGS_d = true;
         if (FLAGS_d == 0)
             return null_stream_;

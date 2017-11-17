@@ -78,7 +78,7 @@ private:
 	int closed_set_num_;
 
 		/**
-         * Methods used for ALL searches: Maybe they should be overrided by other methods.
+         * Methods used for ALL searches: Maybex`xx`xx`` they should be overrided by other methods.
          *
          */
 //	bool Probe(MPI_Data& mpi_data, TreeSearchData* treesearch_data);
@@ -94,10 +94,6 @@ private:
 //	void Steal(MPI_Data& mpi_data);
 	void ProcAfterProbe(); // DOMAINDEPENDENT
 	void Check(); // DOMAINDEPENDENT
-	std::vector<int> GetChildren(int core_i); // DOMAINDEPENDENT
-	void ProcessNode(int sup_num, int* ppc_ext_buf);
-	void CheckProbe(int& accum_period_counter_, long long int lap_time);
-	bool CheckProcessNodeEnd(int n, bool n_is_ms, int processed, long long int start_time);
 
 	//--------
 

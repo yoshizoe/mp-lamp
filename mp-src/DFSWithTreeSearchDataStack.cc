@@ -53,11 +53,11 @@ namespace lamp_search {
                 int victim = mpi_data_.victims_[mpi_data_.rand_m_()];
                 assert(victim <= mpi_data_.nTotalProc_ && "stealrandom");
                 DBG(
-                        D(2) << "Steal Random:" << "\trequesting="
-                             << treesearch_data_->stealer_->Requesting()
-                             << "\trandom counter="
-                             << treesearch_data_->stealer_->RandomCount()
-                             << std::endl;
+                    D(2) << "Steal Random:" << "\trequesting="
+                         << treesearch_data_->stealer_->Requesting()
+                         << "\trandom counter="
+                         << treesearch_data_->stealer_->RandomCount()
+                         << std::endl;
                 );
                 return std::make_pair(victim, -1);
             }
@@ -69,17 +69,17 @@ namespace lamp_search {
                     // becomes false only at RecvGive
                     assert(lifeline <= mpi_data_.nTotalProc_ && "lifeline");
                     DBG(
-                            D(2) << "Steal Lifeline:" << "\trequesting="
-                                 << treesearch_data_->stealer_->Requesting()
-                                 << "\tlifeline counter="
-                                 << treesearch_data_->stealer_->LifelineCounter()
-                                 << "\tlifeline victim="
-                                 << treesearch_data_->stealer_->LifelineVictim()
-                                 << "\tz_=" << mpi_data_.hypercubeDimension_
-                                 << std::endl;
+                        D(2) << "Steal Lifeline:" << "\trequesting="
+                             << treesearch_data_->stealer_->Requesting()
+                             << "\tlifeline counter="
+                             << treesearch_data_->stealer_->LifelineCounter()
+                             << "\tlifeline victim="
+                             << treesearch_data_->stealer_->LifelineVictim()
+                             << "\tz_=" << mpi_data_.hypercubeDimension_
+                             << std::endl;
                     );
-                    return std::make_pair(lifeline, 1);
                 }
+                return std::make_pair(lifeline, 1);
                 break;
             }
             default:
@@ -137,6 +137,22 @@ namespace lamp_search {
         treesearch_data_->stealer_->ResetCounters();
         treesearch_data_->stealer_->SetState(StealState::RANDOM);
         treesearch_data_->stealer_->SetStealStart();
+    }
+
+    void DFSWithTreeSearchDataStack::CheckStealFinish() {
+        treesearch_data_->stealer_->IncLifelineCount();
+        treesearch_data_->stealer_->IncLifelineVictim();
+        if (treesearch_data_->stealer_->LifelineCounter() >= mpi_data_.hypercubeDimension_
+            || mpi_data_.lifelines_[treesearch_data_->stealer_->LifelineVictim()] < 0) { // hack fix
+            // note: this resets next_lifeline_victim_, is this OK?
+            treesearch_data_->stealer_->Finish();
+            DBG( D(2) << "Steal finish:" << std::endl; );
+            // note: one steal phase finished, don't restart until receiving give?
+
+            // in x10 glb, if steal() finishes and empty==true,
+            // processStack() will finish, but will be restarted by deal()
+            // for the same behavior, reseting the states to initial state should be correct
+        }
     }
 
     void DFSWithTreeSearchDataStack::PrintItemset(int* itembuf) const {
