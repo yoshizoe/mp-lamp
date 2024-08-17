@@ -28,31 +28,30 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import os
-import commands
-import ConfigParser
+import configparser
 
 
 # todo: set compiler name (CXX) by command line options
 # default values for CXX are g++ and mpicxx
 
-config = ConfigParser.SafeConfigParser()
+config = configparser.ConfigParser()
 config.read('local.cfg')
 
 orig_env = Environment(ENV=os.environ)
 
 if config.has_option('compilers', 'option'):
-    print config.get('compilers', 'option')
+    print (config.get('compilers', 'option'))
     orig_env.Append(CXXFLAGS=config.get('compilers', 'option'))
 if config.has_option('compilers', 'libs'):
-    print config.get('compilers', 'libs')
+    print (config.get('compilers', 'libs'))
     libs_str_list = config.get('compilers', 'libs').split()
     for lib in libs_str_list:
         orig_env.Append(LIBS=[lib])
 if config.has_option('paths', 'include'):
-    print config.get('paths', 'include')
+    print (config.get('paths', 'include'))
     orig_env.Append(CPPPATH=[Dir(config.get('paths', 'include'))])
 if config.has_option('paths', 'library'):
-    print config.get('paths', 'library')
+    print (config.get('paths', 'library'))
     orig_env.Append(LIBPATH=[Dir(config.get('paths', 'library'))])
 
 debug = ARGUMENTS.get('debug', 0)
